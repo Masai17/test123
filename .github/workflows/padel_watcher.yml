@@ -1,0 +1,108 @@
+name: Padel Watcher
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'  # Elke 30 minuten
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check of het tijd is
+        id: check
+        run: |
+          python3 << 'PYEOF'
+          import os, sys
+          from datetime import datetime, timedelta
+          from zoneinfo import ZoneInfo
+
+          NL = ZoneInfo("Europe/Amsterdam")
+
+          if not os.path.exists("reservering.env"):
+              print("Geen reservering gepland.")
+              with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                  f.write("moet_reserveren=nee\n")
+              sys.exit(0)
+
+          with open("reservering.env") as f:
+              regels = dict(r.strip().split("=", 1) for r in f if "=" in r)
+
+          if regels.get("GEDAAN") == "ja":
+              print("Al gedaan.")
+              with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                  f.write("moet_reserveren=nee\n")
+              sys.exit(0)
+
+          tekst = regels.get("SPEEL_DATUM_TIJD", "")
+          if not tekst:
+              with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                  f.write("moet_reserveren=nee\n")
+              sys.exit(0)
+
+          for fmt in ("%d-%m-%Y %H:%M", "%Y-%m-%d %H:%M"):
+              try:
+                  speeltijd = datetime.strptime(tekst.strip(), fmt).replace(tzinfo=NL)
+                  break
+              except ValueError:
+                  continue
+
+          opent = speeltijd - timedelta(hours=36)
+          nu    = datetime.now(tz=NL)
+          diff  = (nu - opent).total_seconds()
+
+          print(f"Speeltijd: {speeltijd.strftime('%d-%m-%Y %H:%M')}")
+          print(f"Opent:     {opent.strftime('%d-%m-%Y %H:%M')}")
+          print(f"Nu:        {nu.strftime('%d-%m-%Y %H:%M')}")
+
+          if -60 <= diff <= 35 * 60:
+              print("=> RESERVEREN!")
+              with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                  f.write("moet_reserveren=ja\n")
+                  f.write(f"speel_datum_tijd={tekst}\n")
+                  f.write(f"partners={regels.get('PARTNERS','')}\n")
+          elif diff < -60:
+              print(f"=> Nog {int(-diff/60)} minuten wachten.")
+              with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                  f.write("moet_reserveren=nee\n")
+          else:
+              print("=> Te laat, toch proberen!")
+              with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                  f.write("moet_reserveren=ja\n")
+                  f.write(f"speel_datum_tijd={tekst}\n")
+                  f.write(f"partners={regels.get('PARTNERS','')}\n")
+          PYEOF
+
+      - name: Python + Playwright installeren
+        if: steps.check.outputs.moet_reserveren == 'ja'
+        run: |
+          pip install playwright
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Reserveren
+        if: steps.check.outputs.moet_reserveren == 'ja'
+        env:
+          KNLTB_GEBRUIKERSNUMMER: ${{ secrets.KNLTB_GEBRUIKERSNUMMER }}
+          KNLTB_WACHTWOORD: ${{ secrets.KNLTB_WACHTWOORD }}
+          SPEEL_DATUM_TIJD: ${{ steps.check.outputs.speel_datum_tijd }}
+          PARTNERS: ${{ steps.check.outputs.partners }}
+          PYTHONUNBUFFERED: "1"
+        run: python padel_reserveer.py
+
+      - name: Markeer als gedaan
+        if: steps.check.outputs.moet_reserveren == 'ja'
+        run: |
+          sed -i 's/GEDAAN=nee/GEDAAN=ja/' reservering.env
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add reservering.env
+          git commit -m "Reservering uitgevoerd"
+          git push
