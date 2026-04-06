@@ -79,10 +79,13 @@ jobs:
                   te_doen = r
                   break
  
-              else:
-                  print(f"  - {tekst}: opening was {int(-seconden_tot/60)} min geleden - toch proberen")
+              elif seconden_tot > -(24 * 3600):
+                  # Opening was minder dan 24 uur geleden: reserveer alsnog
+                  print(f"  - {tekst}: opening was {int(-seconden_tot/60)} min geleden - alsnog reserveren!")
                   te_doen = r
                   break
+              else:
+                  print(f"  - {tekst}: opening was {int(-seconden_tot/3600)} uur geleden - overgeslagen (te oud)")
  
           if te_doen:
               with open(os.environ["GITHUB_OUTPUT"], "a") as f:
