@@ -1,51 +1,51 @@
 name: Padel Watcher
-
+ 
 on:
   schedule:
     - cron: '*/15 * * * *'  # Elke 15 minuten
   workflow_dispatch:
-
+ 
 jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: write
-
+ 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+ 
       - name: Check reserveringen
         id: check
         run: |
           python3 << 'PYEOF'
-          import os, sys, json
+          import os, sys, json, time
           from datetime import datetime, timedelta
           from zoneinfo import ZoneInfo
-
+ 
           NL = ZoneInfo("Europe/Amsterdam")
           nu = datetime.now(tz=NL)
-
+ 
           bestand = "reserveringen.json"
           if not os.path.exists(bestand):
               print(f"[{nu.strftime('%H:%M')}] Geen reserveringen gepland.")
               with open(os.environ["GITHUB_OUTPUT"], "a") as f:
                   f.write("moet_reserveren=nee\n")
               sys.exit(0)
-
+ 
           with open(bestand) as f:
               reserveringen = json.load(f)
-
+ 
           open_reserveringen = [r for r in reserveringen if not r.get("gedaan")]
           if not open_reserveringen:
               print(f"[{nu.strftime('%H:%M')}] Alle reserveringen al gedaan.")
               with open(os.environ["GITHUB_OUTPUT"], "a") as f:
                   f.write("moet_reserveren=nee\n")
               sys.exit(0)
-
+ 
           print(f"[{nu.strftime('%d-%m-%Y %H:%M')}] {len(open_reserveringen)} open reservering(en):")
-
+ 
           te_doen = None
           for r in open_reserveringen:
               tekst = r["speeltijd"].strip()
@@ -55,27 +55,35 @@ jobs:
                       break
                   except ValueError:
                       continue
-
-              opent = speeltijd - timedelta(hours=36)
-              diff  = (nu - opent).total_seconds()
-              minuten_tot = int(-diff / 60)
-
-              if diff < -(45 * 60):
-                  print(f"  - {tekst}: nog {minuten_tot} min wachten (opent {opent.strftime('%d-%m %H:%M')})")
-              elif diff < 0:
-                  # Binnen 45 min voor opening: reserveer alvast!
-                  print(f"  - {tekst}: opent over {minuten_tot} min - NU RESERVEREN (vroeg instappen)")
+ 
+              opent        = speeltijd - timedelta(hours=36)
+              nu_nu        = datetime.now(tz=NL)
+              seconden_tot = (opent - nu_nu).total_seconds()
+ 
+              if seconden_tot > 15 * 60:
+                  minuten = int(seconden_tot / 60)
+                  print(f"  - {tekst}: nog {minuten} min (opent {opent.strftime('%d-%m %H:%M')})")
+ 
+              elif seconden_tot > 0:
+                  # Opening binnen 15 minuten: wacht tot exact het openingsmoment
+                  print(f"  - {tekst}: opent over {int(seconden_tot)} seconden - wachten...")
+                  print(f"    Wacht tot: {opent.strftime('%H:%M:%S')}")
+                  time.sleep(seconden_tot)
+                  print(f"  - {tekst}: TIJD! Nu reserveren!")
                   te_doen = r
                   break
-              elif diff <= 35 * 60:
-                  print(f"  - {tekst}: TIJD OM TE RESERVEREN!")
+ 
+              elif seconden_tot > -(35 * 60):
+                  # Opening was minder dan 35 min geleden: reserveer
+                  print(f"  - {tekst}: opening was {int(-seconden_tot)} sec geleden - reserveren!")
                   te_doen = r
                   break
+ 
               else:
-                  print(f"  - {tekst}: openingstijd was {int(diff/60)} min geleden - toch proberen")
+                  print(f"  - {tekst}: opening was {int(-seconden_tot/60)} min geleden - toch proberen")
                   te_doen = r
                   break
-
+ 
           if te_doen:
               with open(os.environ["GITHUB_OUTPUT"], "a") as f:
                   f.write("moet_reserveren=ja\n")
@@ -85,15 +93,14 @@ jobs:
               with open(os.environ["GITHUB_OUTPUT"], "a") as f:
                   f.write("moet_reserveren=nee\n")
           PYEOF
-
+ 
       - name: Python + Playwright installeren
         if: steps.check.outputs.moet_reserveren == 'ja'
         run: |
-          echo "Playwright installeren..."
           pip install playwright -q
           playwright install chromium
           playwright install-deps chromium
-
+ 
       - name: Reserveren
         if: steps.check.outputs.moet_reserveren == 'ja'
         env:
@@ -104,23 +111,23 @@ jobs:
           PARTNERS: ${{ steps.check.outputs.partners }}
           PYTHONUNBUFFERED: "1"
         run: python padel_reserveer.py
-
+ 
       - name: Markeer als gedaan
         if: steps.check.outputs.moet_reserveren == 'ja'
         run: |
           python3 << 'PYEOF'
           import json, os
-
+ 
           tekst = os.environ.get("SPEEL_DATUM_TIJD", "").strip()
           with open("reserveringen.json") as f:
               reserveringen = json.load(f)
-
+ 
           for r in reserveringen:
               if r["speeltijd"].strip() == tekst:
                   r["gedaan"] = True
                   print(f"Gemarkeerd als gedaan: {tekst}")
                   break
-
+ 
           with open("reserveringen.json", "w") as f:
               json.dump(reserveringen, f, indent=2)
           PYEOF
