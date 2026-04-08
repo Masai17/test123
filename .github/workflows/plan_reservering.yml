@@ -9,7 +9,7 @@ on:
       partners:
         description: "Partners (kommagescheiden)"
         required: false
-        default: ''
+        default: ""
 
 jobs:
   plan_en_reserveer:
