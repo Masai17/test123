@@ -92,34 +92,38 @@ async def probeer_tijdcel(page, baan, speeltijd):
  
 async def voeg_introducee_toe(page, naam, email):
     """Klik op 'Introducé toevoegen +', vul naam en e-mail in, klik 'Toevoegen'."""
-    from playwright.async_api import TimeoutError as PWTimeout
     print("  Introducé toevoegen: " + naam)
     try:
-        knop = page.get_by_role("button", name="Introducé toevoegen")
-        if await knop.count() == 0:
-            knop = page.locator("button").filter(has_text="Introducé toevoegen")
-        await knop.first.click(timeout=5000)
-        await asyncio.sleep(0.8)
+        # Gebruik JS om de knop te vinden (omzeilt é/speciale tekens problemen)
+        geklikt = await page.evaluate(
+            "() => { const knoppen = [...document.querySelectorAll('button, a')]; "
+            "const k = knoppen.find(b => (b.textContent||'').toLowerCase().includes('introduc')); "
+            "if (k) { k.click(); return true; } return false; }"
+        )
+        if not geklikt:
+            print("  FOUT: Introducé knop niet gevonden op pagina")
+            return False
+        await asyncio.sleep(1.5)
  
-        # Vul naam in (eerste tekst-input in de modal)
-        naam_veld = page.locator("div[role='dialog'] input[type='text'], .modal input[type='text']").first
-        if await naam_veld.count() == 0:
-            naam_veld = page.locator("input[placeholder*='aam'], input[id*='aam'], input[name*='aam']").first
+        # Vul naam in — eerste zichtbare text-input in de modal
+        naam_veld = page.locator("input[type='text']").first
+        await naam_veld.wait_for(state="visible", timeout=5000)
         await naam_veld.fill(naam)
         await asyncio.sleep(0.3)
  
-        # Vul e-mail in
-        email_veld = page.locator("div[role='dialog'] input[type='email'], .modal input[type='email']").first
+        # Vul e-mail in — second input of type email, or second text input
+        email_veld = page.locator("input[type='email']").first
         if await email_veld.count() == 0:
-            email_veld = page.locator("input[placeholder*='mail'], input[id*='mail'], input[name*='mail']").first
+            email_veld = page.locator("input[type='text']").nth(1)
         await email_veld.fill(email)
         await asyncio.sleep(0.3)
  
-        # Klik op "Toevoegen" knop in de modal
-        toevoegen = page.get_by_role("button", name="Toevoegen")
-        if await toevoegen.count() == 0:
-            toevoegen = page.locator("button").filter(has_text="Toevoegen")
-        await toevoegen.first.click(timeout=5000)
+        # Klik "Toevoegen" via JS (vermijdt ambiguïteit met andere knoppen)
+        await page.evaluate(
+            "() => { const knoppen = [...document.querySelectorAll('button')]; "
+            "const k = knoppen.find(b => (b.textContent||'').trim().toLowerCase() === 'toevoegen'); "
+            "if (k) k.click(); }"
+        )
         await asyncio.sleep(1)
         print("  + Introducé toegevoegd: " + naam)
         return True
@@ -220,12 +224,19 @@ async def reserveer(speeltijd, baan_volgorde, partners):
  
         # Stap 4: Dag + dagdeel
         print("Dag: " + zoek_tekst + " dagdeel: " + dagdeel)
+        await asyncio.sleep(1)  # geef pagina tijd om volledig te laden na Volgende
  
         for _ in range(8):
-            zichtbaar = await page.evaluate(
-                "(dag) => { const els = document.querySelectorAll('td, th, div, span'); for (const el of els) { if ((el.innerText||'').trim().includes(dag)) return true; } return false; }",
-                datum_dag
-            )
+            try:
+                zichtbaar = await page.evaluate(
+                    "(dag) => { const els = document.querySelectorAll('td, th, div, span'); for (const el of els) { if ((el.innerText||'').trim().includes(dag)) return true; } return false; }",
+                    datum_dag
+                )
+            except Exception as e:
+                if "context was destroyed" in str(e).lower() or "execution context" in str(e).lower():
+                    await asyncio.sleep(1)
+                    continue
+                raise
             if zichtbaar:
                 break
             try:
