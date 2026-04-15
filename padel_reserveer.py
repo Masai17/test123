@@ -94,7 +94,7 @@ async def voeg_introducee_toe(page, naam, email):
     """Klik op 'Introducé toevoegen +', vul naam en e-mail in, klik 'Toevoegen'."""
     print("  Introducé toevoegen: " + naam)
     try:
-        # Gebruik JS om de knop te vinden (omzeilt é/speciale tekens problemen)
+        # Klik de knop via JS (omzeilt é/encoding problemen)
         geklikt = await page.evaluate(
             "() => { const knoppen = [...document.querySelectorAll('button, a')]; "
             "const k = knoppen.find(b => (b.textContent||'').toLowerCase().includes('introduc')); "
@@ -103,28 +103,72 @@ async def voeg_introducee_toe(page, naam, email):
         if not geklikt:
             print("  FOUT: Introducé knop niet gevonden op pagina")
             return False
-        await asyncio.sleep(1.5)
  
-        # Vul naam in — eerste zichtbare text-input in de modal
-        naam_veld = page.locator("input[type='text']").first
-        await naam_veld.wait_for(state="visible", timeout=5000)
-        await naam_veld.fill(naam)
+        # Wacht tot de modal zichtbaar is — zoek specifiek op het Naam label of modal container
+        print("  Wacht op modal...")
+        try:
+            await page.wait_for_selector(
+                "text=Naam, [class*='modal'] input, [class*='dialog'] input, [role='dialog'] input",
+                state="visible", timeout=6000
+            )
+        except Exception:
+            await asyncio.sleep(2)  # fallback: gewoon wachten
+ 
+        # Vul Naam in — zoek input die DIRECT na het label "Naam" staat, of via JS
+        gevuld = await page.evaluate(
+            f"""() => {{
+                // Zoek label met tekst 'Naam' en pak de bijbehorende input
+                const labels = [...document.querySelectorAll('label')];
+                for (const lbl of labels) {{
+                    if ((lbl.textContent||'').trim().toLowerCase() === 'naam') {{
+                        const forAttr = lbl.getAttribute('for');
+                        const input = forAttr
+                            ? document.getElementById(forAttr)
+                            : lbl.closest('div,form')?.querySelector('input[type="text"]');
+                        if (input) {{ input.value = '{naam}'; input.dispatchEvent(new Event('input', {{bubbles:true}})); return true; }}
+                    }}
+                }}
+                // Fallback: pak alle zichtbare text-inputs, skip de zoekbalk (#searchPlayerText)
+                const inputs = [...document.querySelectorAll('input[type="text"]')]
+                    .filter(i => i.id !== 'searchPlayerText' && i.offsetParent !== null);
+                if (inputs.length > 0) {{ inputs[0].value = '{naam}'; inputs[0].dispatchEvent(new Event('input', {{bubbles:true}})); return true; }}
+                return false;
+            }}"""
+        )
+        if not gevuld:
+            print("  FOUT: Naam-veld niet gevonden in modal")
+            return False
+        print("  Naam ingevuld: " + naam)
         await asyncio.sleep(0.3)
  
-        # Vul e-mail in — second input of type email, or second text input
-        email_veld = page.locator("input[type='email']").first
-        if await email_veld.count() == 0:
-            email_veld = page.locator("input[type='text']").nth(1)
-        await email_veld.fill(email)
+        # Vul E-mail in via JS
+        await page.evaluate(
+            f"""() => {{
+                const labels = [...document.querySelectorAll('label')];
+                for (const lbl of labels) {{
+                    if ((lbl.textContent||'').trim().toLowerCase().includes('mail')) {{
+                        const forAttr = lbl.getAttribute('for');
+                        const input = forAttr
+                            ? document.getElementById(forAttr)
+                            : lbl.closest('div,form')?.querySelector('input[type="email"], input[type="text"]');
+                        if (input) {{ input.value = '{email}'; input.dispatchEvent(new Event('input', {{bubbles:true}})); return; }}
+                    }}
+                }}
+                // Fallback: pak email input
+                const emailInput = document.querySelector('input[type="email"]');
+                if (emailInput) {{ emailInput.value = '{email}'; emailInput.dispatchEvent(new Event('input', {{bubbles:true}})); }}
+            }}"""
+        )
+        print("  Email ingevuld: " + email)
         await asyncio.sleep(0.3)
  
-        # Klik "Toevoegen" via JS (vermijdt ambiguïteit met andere knoppen)
+        # Klik "Toevoegen" in de modal — exacte match op knoptekst
         await page.evaluate(
             "() => { const knoppen = [...document.querySelectorAll('button')]; "
-            "const k = knoppen.find(b => (b.textContent||'').trim().toLowerCase() === 'toevoegen'); "
+            "const k = knoppen.find(b => (b.textContent||'').trim().toLowerCase().includes('toevoegen')); "
             "if (k) k.click(); }"
         )
-        await asyncio.sleep(1)
+        await asyncio.sleep(1.5)
         print("  + Introducé toegevoegd: " + naam)
         return True
     except Exception as e:
@@ -175,9 +219,9 @@ async def reserveer(speeltijd, baan_volgorde, partners):
         # Stap 3: Partners
         print("Partners: " + str(partners))
         for partner in partners:
-            # Controleer of dit een introducé is (prefix "introducee:")
-            if partner.lower().startswith("introducee:"):
-                introducee_naam = partner[len("introducee:"):].strip()
+            # Introducé: naam die begint met "+" bijv. "+Jill"
+            if partner.startswith("+"):
+                introducee_naam = partner[1:].strip()
                 await voeg_introducee_toe(page, introducee_naam, INTRODUCEE_EMAIL)
                 await asyncio.sleep(0.5)
                 continue
