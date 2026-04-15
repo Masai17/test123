@@ -91,88 +91,44 @@ async def probeer_tijdcel(page, baan, speeltijd):
  
  
 async def voeg_introducee_toe(page, naam, email):
-    """Klik op 'Introducé toevoegen +', vul naam en e-mail in, klik 'Toevoegen'."""
+    """Klik op 'Introducé toevoegen', vul naam + email in #guestModal, klik Toevoegen."""
     print("  Introducé toevoegen: " + naam)
     try:
-        # Klik de knop via JS (omzeilt é/encoding problemen)
-        geklikt = await page.evaluate(
-            "() => { const knoppen = [...document.querySelectorAll('button, a')]; "
-            "const k = knoppen.find(b => (b.textContent||'').toLowerCase().includes('introduc')); "
-            "if (k) { k.click(); return true; } return false; }"
-        )
-        if not geklikt:
-            print("  FOUT: Introducé knop niet gevonden op pagina")
-            return False
+        # ── Stap 1: open de modal via JS (zelfde als onclick in de HTML) ──────
+        await page.evaluate("() => $('#guestModal').modal('show')")
+        print("  Modal geopend")
  
-        # Wacht tot de modal zichtbaar is — zoek specifiek op het Naam label of modal container
-        print("  Wacht op modal...")
-        try:
-            await page.wait_for_selector(
-                "text=Naam, [class*='modal'] input, [class*='dialog'] input, [role='dialog'] input",
-                state="visible", timeout=6000
-            )
-        except Exception:
-            await asyncio.sleep(2)  # fallback: gewoon wachten
+        # ── Stap 2: wacht tot #guestModal zichtbaar is ────────────────────────
+        modal = page.locator("#guestModal")
+        await modal.wait_for(state="visible", timeout=6000)
+        await asyncio.sleep(0.5)
  
-        # Vul Naam in — zoek input die DIRECT na het label "Naam" staat, of via JS
-        gevuld = await page.evaluate(
-            f"""() => {{
-                // Zoek label met tekst 'Naam' en pak de bijbehorende input
-                const labels = [...document.querySelectorAll('label')];
-                for (const lbl of labels) {{
-                    if ((lbl.textContent||'').trim().toLowerCase() === 'naam') {{
-                        const forAttr = lbl.getAttribute('for');
-                        const input = forAttr
-                            ? document.getElementById(forAttr)
-                            : lbl.closest('div,form')?.querySelector('input[type="text"]');
-                        if (input) {{ input.value = '{naam}'; input.dispatchEvent(new Event('input', {{bubbles:true}})); return true; }}
-                    }}
-                }}
-                // Fallback: pak alle zichtbare text-inputs, skip de zoekbalk (#searchPlayerText)
-                const inputs = [...document.querySelectorAll('input[type="text"]')]
-                    .filter(i => i.id !== 'searchPlayerText' && i.offsetParent !== null);
-                if (inputs.length > 0) {{ inputs[0].value = '{naam}'; inputs[0].dispatchEvent(new Event('input', {{bubbles:true}})); return true; }}
-                return false;
-            }}"""
-        )
-        if not gevuld:
-            print("  FOUT: Naam-veld niet gevonden in modal")
-            return False
+        # ── Stap 3: naam invullen — eerste input in de modal ──────────────────
+        naam_input = modal.locator("input").first
+        await naam_input.wait_for(state="visible", timeout=4000)
+        await naam_input.click()
+        await naam_input.fill(naam)
         print("  Naam ingevuld: " + naam)
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.2)
  
-        # Vul E-mail in via JS
-        await page.evaluate(
-            f"""() => {{
-                const labels = [...document.querySelectorAll('label')];
-                for (const lbl of labels) {{
-                    if ((lbl.textContent||'').trim().toLowerCase().includes('mail')) {{
-                        const forAttr = lbl.getAttribute('for');
-                        const input = forAttr
-                            ? document.getElementById(forAttr)
-                            : lbl.closest('div,form')?.querySelector('input[type="email"], input[type="text"]');
-                        if (input) {{ input.value = '{email}'; input.dispatchEvent(new Event('input', {{bubbles:true}})); return; }}
-                    }}
-                }}
-                // Fallback: pak email input
-                const emailInput = document.querySelector('input[type="email"]');
-                if (emailInput) {{ emailInput.value = '{email}'; emailInput.dispatchEvent(new Event('input', {{bubbles:true}})); }}
-            }}"""
-        )
+        # ── Stap 4: email invullen — tweede input in de modal ─────────────────
+        email_input = modal.locator("input").nth(1)
+        await email_input.click()
+        await email_input.fill(email)
         print("  Email ingevuld: " + email)
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.2)
  
-        # Klik "Toevoegen" in de modal — exacte match op knoptekst
-        await page.evaluate(
-            "() => { const knoppen = [...document.querySelectorAll('button')]; "
-            "const k = knoppen.find(b => (b.textContent||'').trim().toLowerCase().includes('toevoegen')); "
-            "if (k) k.click(); }"
-        )
+        # ── Stap 5: klik "Toevoegen" knop in de modal ─────────────────────────
+        toevoegen_btn = modal.locator("button").filter(has_text="Toevoegen")
+        await toevoegen_btn.click(timeout=5000)
         await asyncio.sleep(1.5)
+ 
+        # Wacht tot modal dicht is
+        await modal.wait_for(state="hidden", timeout=5000)
         print("  + Introducé toegevoegd: " + naam)
         return True
     except Exception as e:
-        print("  FOUT bij introducé toevoegen: " + str(e)[:80])
+        print("  FOUT bij introducé toevoegen: " + str(e)[:100])
         return False
  
  
@@ -189,7 +145,18 @@ async def reserveer(speeltijd, baan_volgorde, partners):
     async with async_playwright() as p:
         print("Browser openen...")
         browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(viewport={"width": 1280, "height": 900})
+ 
+        # ── VIDEO-OPNAME (verwijder record_video_dir om opname uit te zetten) ──
+        video_dir = "/tmp/playwright_video"
+        import os as _os
+        _os.makedirs(video_dir, exist_ok=True)
+        context = await browser.new_context(
+            viewport={"width": 1280, "height": 900},
+            record_video_dir=video_dir,
+            record_video_size={"width": 1280, "height": 900},
+        )
+        # ──────────────────────────────────────────────────────────────────────
+ 
         page    = await context.new_page()
  
         # Stap 0: Inloggen
@@ -384,8 +351,23 @@ async def reserveer(speeltijd, baan_volgorde, partners):
         baan_naam = "Baan " + (gekozen_baan or "?")
         eind      = speeltijd + timedelta(hours=1)
         print("KLAAR! " + baan_naam + " op " + speeltijd.strftime('%d-%m-%Y') + " om " + tijd_str + "-" + eind.strftime('%H:%M'))
+ 
+        # ── VIDEO-OPNAME: sla het videobestand op en druk het pad af ──────────
+        video_pad = await page.video.path() if page.video else None
         await context.close()
         await browser.close()
+        if video_pad:
+            import shutil as _shutil
+            import glob as _glob
+            # Zoek het daadwerkelijke bestand (Playwright schrijft het na close)
+            bestanden = _glob.glob("/tmp/playwright_video/*.webm")
+            if bestanden:
+                nieuwste = max(bestanden, key=_os.path.getmtime)
+                doel = "/tmp/reservering.webm"
+                _shutil.copy2(nieuwste, doel)
+                print("VIDEO OPGESLAGEN: " + doel)
+                print("  (download via GitHub Actions artifacts of verwijder record_video_dir om opname uit te zetten)")
+        # ──────────────────────────────────────────────────────────────────────
  
  
 async def main():
