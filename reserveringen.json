@@ -3,5 +3,10 @@
     "speeltijd": "9-4-2026 9:30",
     "partners": "Rens Dekker",
     "gedaan": true
+  },
+  {
+    "speeltijd": "23-04-2026 20:30",
+    "partners": "Rens Dekker,+Jill,+Sascha",
+    "gedaan": false
   }
 ]
