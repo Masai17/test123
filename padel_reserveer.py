@@ -2,20 +2,20 @@ import asyncio
 import os
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-
+ 
 NL = ZoneInfo("Europe/Amsterdam")
-
+ 
 GEBRUIKERSNUMMER  = os.getenv("KNLTB_GEBRUIKERSNUMMER", "")
 WACHTWOORD        = os.getenv("KNLTB_WACHTWOORD", "")
 WEBSITE           = os.getenv("KNLTB_WEBSITE", "")
 SPEEL_DATUM_TIJD  = os.getenv("SPEEL_DATUM_TIJD", "")
 PARTNERS          = os.getenv("PARTNERS", "")
 INTRODUCEE_EMAIL  = os.getenv("INTRODUCEE_EMAIL", "")
-
-
+ 
+ 
 def nu_nl():
     return datetime.now(tz=NL)
-
+ 
 def parse_speeltijd(tekst):
     for fmt in ("%d-%m-%Y %H:%M", "%Y-%m-%d %H:%M"):
         try:
@@ -23,19 +23,19 @@ def parse_speeltijd(tekst):
         except ValueError:
             continue
     raise ValueError("Ongeldige datum: " + tekst)
-
+ 
 def bepaal_baan_volgorde(t):
     if t.hour < 19:
         return ["F", "G", "I", "H"]
     else:
         return ["G", "F", "H", "I"]
-
+ 
 def bepaal_dagdeel(t):
     if t.hour < 12:   return "Ochtend"
     elif t.hour < 19: return "Middag"
     else:             return "Avond"
-
-
+ 
+ 
 async def klik_volgende(page):
     from playwright.async_api import TimeoutError as PWTimeout
     try:
@@ -57,14 +57,20 @@ async def klik_volgende(page):
         return
     except PWTimeout:
         pass
-    await page.evaluate(
-        "() => { const knoppen = [...document.querySelectorAll('button')]; for (const k of knoppen.reverse()) { if ((k.textContent||'').includes('Volgende')) { k.click(); return; } } }"
-    )
+    try:
+        await page.evaluate(
+            "() => { const knoppen = [...document.querySelectorAll('button')]; for (const k of knoppen.reverse()) { if ((k.textContent||'').includes('Volgende')) { k.click(); return; } } }"
+        )
+    except Exception as e:
+        # "Execution context was destroyed" = klik triggerde navigatie, dat is prima
+        if "context was destroyed" not in str(e).lower() and "execution context" not in str(e).lower():
+            raise
+        print("  Volgende: navigatie gedetecteerd (OK)")
     await page.wait_for_load_state("networkidle", timeout=15000)
     await asyncio.sleep(0.5)
     print("  Volgende: OK (JS)")
-
-
+ 
+ 
 async def probeer_tijdcel(page, baan, speeltijd):
     dag_nummer = {"F": "6", "G": "7", "H": "8", "I": "9"}[baan]
     uur        = str(speeltijd.hour)
@@ -82,8 +88,8 @@ async def probeer_tijdcel(page, baan, speeltijd):
     except Exception as e:
         print("  Baan " + baan + " niet beschikbaar: " + str(e)[:60])
         return False
-
-
+ 
+ 
 async def voeg_introducee_toe(page, naam, email):
     """Klik op 'Introducé toevoegen +', vul naam en e-mail in, klik 'Toevoegen'."""
     from playwright.async_api import TimeoutError as PWTimeout
@@ -94,21 +100,21 @@ async def voeg_introducee_toe(page, naam, email):
             knop = page.locator("button").filter(has_text="Introducé toevoegen")
         await knop.first.click(timeout=5000)
         await asyncio.sleep(0.8)
-
+ 
         # Vul naam in (eerste tekst-input in de modal)
         naam_veld = page.locator("div[role='dialog'] input[type='text'], .modal input[type='text']").first
         if await naam_veld.count() == 0:
             naam_veld = page.locator("input[placeholder*='aam'], input[id*='aam'], input[name*='aam']").first
         await naam_veld.fill(naam)
         await asyncio.sleep(0.3)
-
+ 
         # Vul e-mail in
         email_veld = page.locator("div[role='dialog'] input[type='email'], .modal input[type='email']").first
         if await email_veld.count() == 0:
             email_veld = page.locator("input[placeholder*='mail'], input[id*='mail'], input[name*='mail']").first
         await email_veld.fill(email)
         await asyncio.sleep(0.3)
-
+ 
         # Klik op "Toevoegen" knop in de modal
         toevoegen = page.get_by_role("button", name="Toevoegen")
         if await toevoegen.count() == 0:
@@ -120,24 +126,24 @@ async def voeg_introducee_toe(page, naam, email):
     except Exception as e:
         print("  FOUT bij introducé toevoegen: " + str(e)[:80])
         return False
-
-
+ 
+ 
 async def reserveer(speeltijd, baan_volgorde, partners):
     from playwright.async_api import async_playwright, TimeoutError as PWTimeout
-
+ 
     tijd_str  = speeltijd.strftime("%H:%M")
     datum_dag = str(speeltijd.day)
     dagdeel   = bepaal_dagdeel(speeltijd)
-
+ 
     dag_afkortingen = ["", "ma", "di", "wo", "do", "vr", "za", "zo"]
     zoek_tekst      = dag_afkortingen[speeltijd.isoweekday()] + " " + datum_dag
-
+ 
     async with async_playwright() as p:
         print("Browser openen...")
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context(viewport={"width": 1280, "height": 900})
         page    = await context.new_page()
-
+ 
         # Stap 0: Inloggen
         print("Inloggen...")
         await page.goto(WEBSITE, wait_until="networkidle", timeout=30000)
@@ -151,17 +157,17 @@ async def reserveer(speeltijd, baan_volgorde, partners):
         await page.locator('button:has-text("Inloggen")').click()
         await page.wait_for_load_state("networkidle", timeout=20000)
         print("  Ingelogd!")
-
+ 
         # Stap 1: Baan reserveringen tab
         print("Naar Baan reserveringen...")
         await page.locator('text=Baan reserveringen').click()
         await page.wait_for_load_state("networkidle", timeout=10000)
-
+ 
         # Stap 2: Baan afhangen
         print("Baan afhangen...")
         await page.locator('text=Baan afhangen').click()
         await page.wait_for_load_state("networkidle", timeout=10000)
-
+ 
         # Stap 3: Partners
         print("Partners: " + str(partners))
         for partner in partners:
@@ -171,7 +177,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                 await voeg_introducee_toe(page, introducee_naam, INTRODUCEE_EMAIL)
                 await asyncio.sleep(0.5)
                 continue
-
+ 
             toegevoegd = False
             try:
                 zoek = page.locator('#searchPlayerText')
@@ -181,7 +187,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                 await zoek.type(partner, delay=80)
                 print("  Getypt: " + partner)
                 await asyncio.sleep(2)
-
+ 
                 try:
                     dropdown = page.locator(".ui-autocomplete li, [class*=autocomplete] li, [class*=result] li").first
                     await dropdown.wait_for(state="visible", timeout=4000)
@@ -190,7 +196,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                     toegevoegd = True
                 except Exception:
                     pass
-
+ 
                 if not toegevoegd:
                     try:
                         item    = page.get_by_text(partner, exact=False).first
@@ -204,17 +210,17 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                         print("  Fout: " + str(e))
             except Exception as e:
                 print("  Fout: " + str(e))
-
+ 
             if not toegevoegd:
                 print("  WAARSCHUWING: " + partner + " niet gevonden")
             await asyncio.sleep(0.5)
-
+ 
         await klik_volgende(page)
         print("  URL na partners: " + page.url)
-
+ 
         # Stap 4: Dag + dagdeel
         print("Dag: " + zoek_tekst + " dagdeel: " + dagdeel)
-
+ 
         for _ in range(8):
             zichtbaar = await page.evaluate(
                 "(dag) => { const els = document.querySelectorAll('td, th, div, span'); for (const el of els) { if ((el.innerText||'').trim().includes(dag)) return true; } return false; }",
@@ -227,7 +233,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                 await asyncio.sleep(0.5)
             except PWTimeout:
                 break
-
+ 
         dag_geklikt = False
         try:
             dag_x   = None
@@ -244,7 +250,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                             break
                 except Exception:
                     continue
-
+ 
             if dag_x is not None:
                 dagdeel_els  = page.locator("td, div")
                 beste_el     = None
@@ -264,7 +270,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                             beste_el      = el
                     except Exception:
                         continue
-
+ 
                 if beste_el is not None:
                     await beste_el.scroll_into_view_if_needed()
                     await beste_el.click()
@@ -272,14 +278,14 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                     dag_geklikt = True
         except Exception as e:
             print("  Dag fout: " + str(e))
-
+ 
         if not dag_geklikt:
             print("  DAG NIET GEKLIKT!")
-
+ 
         await asyncio.sleep(0.5)
         await klik_volgende(page)
         print("  URL na dag: " + page.url)
-
+ 
         # Stap 5: Tijdcel - probeer banen in volgorde
         print("Tijdslot " + tijd_str + " voorkeur: " + str(baan_volgorde))
         gekozen_baan = None
@@ -287,13 +293,13 @@ async def reserveer(speeltijd, baan_volgorde, partners):
             if await probeer_tijdcel(page, baan, speeltijd):
                 gekozen_baan = baan
                 break
-
+ 
         if not gekozen_baan:
             print("  GEEN BAAN BESCHIKBAAR!")
-
+ 
         await klik_volgende(page)
         print("  URL na baan: " + page.url)
-
+ 
         # Stap 6: Bevestigen
         print("Bevestigen...")
         await asyncio.sleep(1)
@@ -319,37 +325,37 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                 pass
         if not bevestigd:
             print("  BEVESTIGEN MISLUKT!")
-
+ 
         baan_naam = "Baan " + (gekozen_baan or "?")
         eind      = speeltijd + timedelta(hours=1)
         print("KLAAR! " + baan_naam + " op " + speeltijd.strftime('%d-%m-%Y') + " om " + tijd_str + "-" + eind.strftime('%H:%M'))
         await context.close()
         await browser.close()
-
-
+ 
+ 
 async def main():
     print("Padel Auto-Reservering")
     print("======================")
-
+ 
     if not GEBRUIKERSNUMMER or not WACHTWOORD:
         raise ValueError("Stel KNLTB_GEBRUIKERSNUMMER en KNLTB_WACHTWOORD in als GitHub Secrets!")
     if not WEBSITE:
         raise ValueError("Stel KNLTB_WEBSITE in als GitHub Secret!")
     if not SPEEL_DATUM_TIJD:
         raise ValueError("Stel SPEEL_DATUM_TIJD in.")
-
+ 
     speeltijd     = parse_speeltijd(SPEEL_DATUM_TIJD)
     baan_volgorde = bepaal_baan_volgorde(speeltijd)
     partners      = [p.strip() for p in PARTNERS.split(",") if p.strip()] if PARTNERS else []
-
+ 
     print("Speeltijd:     " + speeltijd.strftime('%d-%m-%Y om %H:%M') + " (NL tijd)")
     print("Baan volgorde: " + str(baan_volgorde))
     print("Partners:      " + (", ".join(partners) if partners else "(geen)"))
     print("Nu:            " + nu_nl().strftime('%d-%m-%Y om %H:%M:%S') + " (NL tijd)")
     print()
-
+ 
     await reserveer(speeltijd, baan_volgorde, partners)
-
-
+ 
+ 
 if __name__ == "__main__":
     asyncio.run(main())
