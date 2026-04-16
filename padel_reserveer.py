@@ -352,23 +352,6 @@ async def reserveer(speeltijd, baan_volgorde, partners):
         eind      = speeltijd + timedelta(hours=1)
         print("KLAAR! " + baan_naam + " op " + speeltijd.strftime('%d-%m-%Y') + " om " + tijd_str + "-" + eind.strftime('%H:%M'))
  
-        # ── VIDEO-OPNAME: sla het videobestand op en druk het pad af ──────────
-        video_pad = await page.video.path() if page.video else None
-        await context.close()
-        await browser.close()
-        if video_pad:
-            import shutil as _shutil
-            import glob as _glob
-            # Zoek het daadwerkelijke bestand (Playwright schrijft het na close)
-            bestanden = _glob.glob("/tmp/playwright_video/*.webm")
-            if bestanden:
-                nieuwste = max(bestanden, key=_os.path.getmtime)
-                doel = "/tmp/reservering.webm"
-                _shutil.copy2(nieuwste, doel)
-                print("VIDEO OPGESLAGEN: " + doel)
-                print("  (download via GitHub Actions artifacts of verwijder record_video_dir om opname uit te zetten)")
-        # ──────────────────────────────────────────────────────────────────────
- 
  
 async def main():
     print("Padel Auto-Reservering")
