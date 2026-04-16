@@ -108,16 +108,7 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: python padel_reserveer.py
  
-      # ── VIDEO-OPNAME: upload video als artifact (verwijder stap om uit te zetten) ──
-      - name: Upload video opname
-        if: steps.check.outputs.moet_reserveren == 'ja'
-        uses: actions/upload-artifact@v4
-        with:
-          name: reservering-video
-          path: /tmp/playwright_video/*.webm
-          if-no-files-found: ignore
-      # ────────────────────────────────────────────────────────────────────────────────
- 
+      
       - name: Markeer als gedaan
         if: steps.check.outputs.moet_reserveren == 'ja'
         run: |
