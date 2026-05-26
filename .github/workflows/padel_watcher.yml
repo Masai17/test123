@@ -110,7 +110,7 @@ jobs:
  
       
       - name: Markeer als gedaan
-        if: steps.check.outputs.moet_reserveren == 'ja'
+        if: always() && steps.check.outputs.moet_reserveren == 'ja'
         run: |
           python3 << 'PYEOF'
           import json, os
