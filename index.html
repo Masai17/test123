@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="color(display-p3 0.157 0.42 0.251)">
+  <title>Padel Plannen</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --groen: #29815f;
+      --groen-licht: #34a378;
+      --groen-bg: #e8f5ee;
+      --tekst: #1a2e22;
+      --subtekst: #4a6657;
+      --rand: #c5ddd0;
+      --wit: #ffffff;
+      --fout: #c0392b;
+      --fout-bg: #fdecea;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f0f7f3;
+      color: var(--tekst);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: var(--groen);
+      color: white;
+      padding: 20px 20px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    header h1 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    header span { font-size: 1.5rem; }
+
+    .btn-instellingen {
+      background: rgba(255,255,255,0.15);
+      border: none;
+      color: white;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    main {
+      padding: 20px 16px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-width: 480px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .kaart {
+      background: var(--wit);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+
+    .kaart h2 {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--subtekst);
+      margin-bottom: 14px;
+    }
+
+    .veld {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .veld:last-child { margin-bottom: 0; }
+
+    label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--subtekst);
+    }
+
+    input[type="date"],
+    input[type="time"],
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 13px 14px;
+      font-size: 1rem;
+      border: 1.5px solid var(--rand);
+      border-radius: 10px;
+      background: #f8fdf9;
+      color: var(--tekst);
+      outline: none;
+      -webkit-appearance: none;
+      transition: border-color 0.15s;
+    }
+
+    input:focus {
+      border-color: var(--groen);
+      background: white;
+    }
+
+    .tijd-rij {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .tijden-snel {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .tijden-snel button {
+      padding: 6px 13px;
+      border-radius: 20px;
+      border: 1.5px solid var(--rand);
+      background: white;
+      color: var(--subtekst);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .tijden-snel button.actief,
+    .tijden-snel button:hover {
+      border-color: var(--groen);
+      background: var(--groen-bg);
+      color: var(--groen);
+    }
+
+    .partners-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: var(--groen-bg);
+      border: 1.5px solid var(--groen-licht);
+      border-radius: 20px;
+      font-size: 0.85rem;
+      color: var(--groen);
+      font-weight: 500;
+    }
+
+    .chip-verwijder {
+      background: none;
+      border: none;
+      color: var(--groen);
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      padding: 0;
+      opacity: 0.7;
+    }
+
+    .partner-invoer {
+      display: flex;
+      gap: 8px;
+    }
+
+    .partner-invoer input {
+      flex: 1;
+    }
+
+    .btn-toevoegen {
+      padding: 0 16px;
+      background: var(--groen-bg);
+      border: 1.5px solid var(--groen-licht);
+      color: var(--groen);
+      border-radius: 10px;
+      font-size: 1.3rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .btn-intro-toggle {
+      font-size: 0.8rem;
+      color: var(--groen);
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      margin-top: 6px;
+      text-decoration: underline;
+    }
+
+    .intro-velden {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--rand);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .btn-plan {
+      width: 100%;
+      padding: 17px;
+      background: var(--groen);
+      color: white;
+      border: none;
+      border-radius: 14px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: -0.2px;
+      transition: background 0.15s, transform 0.1s;
+      margin-top: 4px;
+    }
+
+    .btn-plan:active { transform: scale(0.98); }
+    .btn-plan:hover { background: #217a55; }
+    .btn-plan:disabled {
+      background: #b0c9bc;
+      cursor: default;
+      transform: none;
+    }
+
+    .melding {
+      padding: 14px 16px;
+      border-radius: 12px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      display: none;
+    }
+
+    .melding.succes {
+      background: var(--groen-bg);
+      color: var(--groen);
+      border: 1.5px solid var(--groen-licht);
+      display: block;
+    }
+
+    .melding.fout {
+      background: var(--fout-bg);
+      color: var(--fout);
+      border: 1.5px solid #e8b4b0;
+      display: block;
+    }
+
+    /* Instellingen-overlay */
+    .overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 100;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .overlay.open { display: flex; }
+
+    .overlay-inhoud {
+      background: white;
+      width: 100%;
+      max-width: 480px;
+      border-radius: 20px 20px 0 0;
+      padding: 24px 20px 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .overlay-inhoud h2 {
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    .overlay-inhoud p {
+      font-size: 0.82rem;
+      color: var(--subtekst);
+      line-height: 1.5;
+    }
+
+    .overlay-inhoud a {
+      color: var(--groen);
+    }
+
+    .btn-opslaan {
+      width: 100%;
+      padding: 14px;
+      background: var(--groen);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .btn-sluiten {
+      background: #f0f0f0;
+      color: #555;
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 12px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Loading spinner op knop */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 2.5px solid rgba(255,255,255,0.4);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;align-items:center;gap:10px">
+    <span>🎾</span>
+    <h1>Padel Plannen</h1>
+  </div>
+  <button class="btn-instellingen" onclick="toggleInstellingen()" title="Instellingen">⚙️</button>
+</header>
+
+<main>
+  <div id="melding" class="melding"></div>
+
+  <!-- Datum & Tijd -->
+  <div class="kaart">
+    <h2>Wanneer?</h2>
+    <div class="veld">
+      <label for="datum">Datum</label>
+      <input type="date" id="datum" />
+    </div>
+    <div class="veld">
+      <label>Tijd</label>
+      <div class="tijden-snel" id="tijdknoppen">
+        <button onclick="kiesTijd('07:00')">07:00</button>
+        <button onclick="kiesTijd('07:30')">07:30</button>
+        <button onclick="kiesTijd('08:00')">08:00</button>
+        <button onclick="kiesTijd('08:30')">08:30</button>
+        <button onclick="kiesTijd('09:00')">09:00</button>
+        <button onclick="kiesTijd('19:00')">19:00</button>
+        <button onclick="kiesTijd('19:30')">19:30</button>
+        <button onclick="kiesTijd('20:00')">20:00</button>
+        <button onclick="kiesTijd('20:30')">20:30</button>
+        <button onclick="kiesTijd('21:00')">21:00</button>
+      </div>
+      <input type="time" id="tijd" placeholder="of typ een tijd" style="margin-top:8px" oninput="bijwerkActief()" />
+    </div>
+  </div>
+
+  <!-- Partners -->
+  <div class="kaart">
+    <h2>Partners</h2>
+    <div id="partner-chips" class="partners-chips"></div>
+    <div class="partner-invoer">
+      <input type="text" id="partner-invoer" placeholder="Naam partner" autocomplete="off"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();voegPartnerToe()}" />
+      <button class="btn-toevoegen" onclick="voegPartnerToe()">＋</button>
+    </div>
+    <button class="btn-intro-toggle" id="intro-toggle" onclick="toggleIntro()">＋ Introducé toevoegen</button>
+    <div class="intro-velden" id="intro-velden" style="display:none">
+      <div class="veld" style="margin:0">
+        <label for="intro-naam">Naam introducé</label>
+        <input type="text" id="intro-naam" placeholder="Naam (gebruik + voor introducés)" autocomplete="off" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Knop -->
+  <button class="btn-plan" id="plan-knop" onclick="planReservering()">Reservering inplannen</button>
+</main>
+
+<!-- Instellingen overlay -->
+<div class="overlay" id="overlay">
+  <div class="overlay-inhoud">
+    <h2>⚙️ Instellingen</h2>
+    <p>
+      Je hebt een GitHub <strong>Personal Access Token</strong> nodig met <code>workflow</code> scope.<br><br>
+      Maak er één aan op
+      <a href="https://github.com/settings/tokens/new?scopes=workflow&description=Padel+app" target="_blank">
+        github.com/settings/tokens
+      </a> (scopes: <code>workflow</code>).
+    </p>
+    <div class="veld" style="margin:0">
+      <label for="token-invoer">GitHub Token</label>
+      <input type="password" id="token-invoer" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off" />
+    </div>
+    <button class="btn-opslaan" onclick="slaTokenOp()">Opslaan</button>
+    <button class="btn-sluiten" onclick="toggleInstellingen()">Sluiten</button>
+  </div>
+</div>
+
+<script>
+  const REPO = "Masai17/test123";
+  const WORKFLOW = "plan_reservering.yml";
+  let partners = [];
+  let gekozenTijd = null;
+
+  // Datum standaard op vandaag zetten
+  const d = new Date();
+  d.setDate(d.getDate() + 1); // morgen als standaard
+  document.getElementById("datum").value = d.toISOString().slice(0, 10);
+
+  function kiesTijd(t) {
+    gekozenTijd = t;
+    document.getElementById("tijd").value = t;
+    document.querySelectorAll(".tijden-snel button").forEach(b => {
+      b.classList.toggle("actief", b.textContent === t);
+    });
+  }
+
+  function bijwerkActief() {
+    const t = document.getElementById("tijd").value;
+    document.querySelectorAll(".tijden-snel button").forEach(b => {
+      b.classList.toggle("actief", b.textContent === t);
+    });
+    gekozenTijd = t || null;
+  }
+
+  function voegPartnerToe() {
+    const inp = document.getElementById("partner-invoer");
+    const naam = inp.value.trim();
+    if (!naam) return;
+    partners.push(naam);
+    renderChips();
+    inp.value = "";
+    inp.focus();
+  }
+
+  function verwijderPartner(i) {
+    partners.splice(i, 1);
+    renderChips();
+  }
+
+  function renderChips() {
+    const container = document.getElementById("partner-chips");
+    container.innerHTML = partners.map((p, i) =>
+      `<span class="chip">${p} <button class="chip-verwijder" onclick="verwijderPartner(${i})">✕</button></span>`
+    ).join("");
+  }
+
+  function toggleIntro() {
+    const velden = document.getElementById("intro-velden");
+    const toggle = document.getElementById("intro-toggle");
+    const open = velden.style.display !== "none";
+    velden.style.display = open ? "none" : "flex";
+    toggle.textContent = open ? "＋ Introducé toevoegen" : "− Introducé verbergen";
+  }
+
+  async function planReservering() {
+    const token = localStorage.getItem("padel_token");
+    if (!token) {
+      toonMelding("fout", "Geen token ingesteld. Tik op ⚙️ om je GitHub token in te voeren.");
+      return;
+    }
+
+    const datum = document.getElementById("datum").value;
+    const tijd = document.getElementById("tijd").value;
+    if (!datum) { toonMelding("fout", "Kies een datum."); return; }
+    if (!tijd) { toonMelding("fout", "Kies een tijd."); return; }
+
+    // Converteer YYYY-MM-DD → DD-MM-YYYY
+    const [j, m, dag] = datum.split("-");
+    const speelDatumTijd = `${dag}-${m}-${j} ${tijd}`;
+
+    // Bouw partners-string op
+    const introNaam = document.getElementById("intro-naam").value.trim();
+    let allePartners = [...partners];
+    if (introNaam) allePartners.push(`+${introNaam}`);
+    const partnersStr = allePartners.join(",");
+
+    const knop = document.getElementById("plan-knop");
+    knop.disabled = true;
+    knop.innerHTML = '<span class="spinner"></span>Bezig…';
+
+    try {
+      const resp = await fetch(
+        `https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/dispatches`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            ref: "main",
+            inputs: {
+              speel_datum_tijd: speelDatumTijd,
+              partners: partnersStr
+            }
+          })
+        }
+      );
+
+      if (resp.status === 204) {
+        toonMelding("succes", `✅ Ingepland: ${speelDatumTijd}${partnersStr ? ` met ${allePartners.join(", ")}` : ""}.\n\nDe watcher reserveert automatisch zodra het boekingsvenster opengaat.`);
+        // Reset form
+        partners = [];
+        renderChips();
+        document.getElementById("intro-naam").value = "";
+        document.getElementById("intro-velden").style.display = "none";
+        document.getElementById("intro-toggle").textContent = "＋ Introducé toevoegen";
+      } else {
+        const body = await resp.json().catch(() => ({}));
+        toonMelding("fout", `❌ GitHub API fout ${resp.status}: ${body.message || "onbekend"}`);
+      }
+    } catch (e) {
+      toonMelding("fout", `❌ Netwerkfout: ${e.message}`);
+    }
+
+    knop.disabled = false;
+    knop.textContent = "Reservering inplannen";
+  }
+
+  function toonMelding(type, tekst) {
+    const el = document.getElementById("melding");
+    el.className = `melding ${type}`;
+    el.textContent = tekst;
+    el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function toggleInstellingen() {
+    const overlay = document.getElementById("overlay");
+    overlay.classList.toggle("open");
+    if (overlay.classList.contains("open")) {
+      const opgeslagen = localStorage.getItem("padel_token") || "";
+      document.getElementById("token-invoer").value = opgeslagen
+        ? opgeslagen.slice(0, 4) + "…" + opgeslagen.slice(-4)
+        : "";
+    }
+  }
+
+  function slaTokenOp() {
+    const inp = document.getElementById("token-invoer").value.trim();
+    if (!inp || inp.includes("…")) {
+      toggleInstellingen();
+      return;
+    }
+    localStorage.setItem("padel_token", inp);
+    toggleInstellingen();
+    toonMelding("succes", "✅ Token opgeslagen.");
+  }
+
+  // Toon instellingen als er nog geen token is
+  if (!localStorage.getItem("padel_token")) {
+    setTimeout(toggleInstellingen, 400);
+  }
+</script>
+</body>
+</html>
