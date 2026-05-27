@@ -42,7 +42,7 @@ async def klik_volgende(page):
         btn = page.get_by_role("button", name="Volgende")
         if await btn.count() > 0:
             await btn.last.click(timeout=8000)
-            await page.wait_for_load_state("networkidle", timeout=15000)
+            await page.wait_for_load_state("load", timeout=15000)
             await asyncio.sleep(0.5)
             print("  Volgende: OK")
             return
@@ -51,7 +51,7 @@ async def klik_volgende(page):
     try:
         btn = page.locator("button").filter(has_text="Volgende").last
         await btn.click(timeout=8000)
-        await page.wait_for_load_state("networkidle", timeout=15000)
+        await page.wait_for_load_state("load", timeout=15000)
         await asyncio.sleep(0.5)
         print("  Volgende: OK (filter)")
         return
@@ -66,7 +66,7 @@ async def klik_volgende(page):
         if "context was destroyed" not in str(e).lower() and "execution context" not in str(e).lower():
             raise
         print("  Volgende: navigatie gedetecteerd (OK)")
-    await page.wait_for_load_state("networkidle", timeout=15000)
+    await page.wait_for_load_state("load", timeout=15000)
     await asyncio.sleep(0.5)
     print("  Volgende: OK (JS)")
  
@@ -161,7 +161,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
  
         # Stap 0: Inloggen
         print("Inloggen...")
-        await page.goto(WEBSITE, wait_until="networkidle", timeout=30000)
+        await page.goto(WEBSITE, wait_until="domcontentloaded", timeout=60000)
         try:
             await page.select_option("select", label="Bondsnummer")
         except Exception:
@@ -170,18 +170,18 @@ async def reserveer(speeltijd, baan_volgorde, partners):
         await page.locator('input[type="text"]').first.fill(GEBRUIKERSNUMMER)
         await page.fill('input[type="password"]', WACHTWOORD)
         await page.locator('button:has-text("Inloggen")').click()
-        await page.wait_for_load_state("networkidle", timeout=20000)
+        await page.wait_for_load_state("load", timeout=20000)
         print("  Ingelogd!")
  
         # Stap 1: Baan reserveringen tab
         print("Naar Baan reserveringen...")
         await page.locator('text=Baan reserveringen').click()
-        await page.wait_for_load_state("networkidle", timeout=10000)
- 
+        await page.wait_for_load_state("load", timeout=10000)
+
         # Stap 2: Baan afhangen
         print("Baan afhangen...")
         await page.locator('text=Baan afhangen').click()
-        await page.wait_for_load_state("networkidle", timeout=10000)
+        await page.wait_for_load_state("load", timeout=10000)
  
         # Stap 3: Partners
         print("Partners: " + str(partners))
@@ -331,7 +331,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                 el = page.locator(sel).first
                 if await el.is_visible(timeout=3000):
                     await el.click()
-                    await page.wait_for_load_state("networkidle", timeout=15000)
+                    await page.wait_for_load_state("load", timeout=15000)
                     print("  Bevestigen OK: " + sel)
                     bevestigd = True
                     break
@@ -340,7 +340,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
         if not bevestigd:
             try:
                 await page.get_by_role("link", name="Bevestigen").click(timeout=5000)
-                await page.wait_for_load_state("networkidle", timeout=15000)
+                await page.wait_for_load_state("load", timeout=15000)
                 print("  Bevestigen OK (link)")
                 bevestigd = True
             except Exception:

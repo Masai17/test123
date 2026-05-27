@@ -20,6 +20,9 @@
       --wit: #ffffff;
       --fout: #c0392b;
       --fout-bg: #fdecea;
+      --oranje: #d97706;
+      --oranje-bg: #fef3c7;
+      --tab-h: 64px;
     }
 
     body {
@@ -31,6 +34,7 @@
       flex-direction: column;
     }
 
+    /* ── Header ── */
     header {
       background: var(--groen);
       color: white;
@@ -42,316 +46,250 @@
       top: 0;
       z-index: 10;
     }
-
-    header h1 {
-      font-size: 1.2rem;
-      font-weight: 700;
-      letter-spacing: -0.3px;
-    }
-
+    header h1 { font-size: 1.2rem; font-weight: 700; letter-spacing: -0.3px; }
     header span { font-size: 1.5rem; }
-
     .btn-instellingen {
       background: rgba(255,255,255,0.15);
-      border: none;
-      color: white;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      font-size: 1.1rem;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      border: none; color: white;
+      width: 36px; height: 36px;
+      border-radius: 50%; font-size: 1.1rem;
+      cursor: pointer; display: flex;
+      align-items: center; justify-content: center;
     }
 
-    main {
-      padding: 20px 16px;
+    /* ── Tab-inhoud ── */
+    .tab-inhoud {
+      display: none;
       flex: 1;
-      display: flex;
       flex-direction: column;
+      padding: 20px 16px calc(var(--tab-h) + 20px);
       gap: 16px;
       max-width: 480px;
       width: 100%;
       margin: 0 auto;
     }
+    .tab-inhoud.actief { display: flex; }
 
+    /* ── Kaarten ── */
     .kaart {
       background: var(--wit);
       border-radius: 16px;
       padding: 20px;
       box-shadow: 0 1px 4px rgba(0,0,0,0.08);
     }
-
     .kaart h2 {
-      font-size: 0.8rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      color: var(--subtekst);
-      margin-bottom: 14px;
+      font-size: 0.8rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.8px;
+      color: var(--subtekst); margin-bottom: 14px;
     }
 
-    .veld {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin-bottom: 14px;
-    }
-
+    /* ── Formulier ── */
+    .veld { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
     .veld:last-child { margin-bottom: 0; }
+    label { font-size: 0.85rem; font-weight: 600; color: var(--subtekst); }
 
-    label {
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: var(--subtekst);
-    }
-
-    input[type="date"],
-    input[type="time"],
-    input[type="text"],
-    input[type="password"] {
-      width: 100%;
-      padding: 13px 14px;
-      font-size: 1rem;
-      border: 1.5px solid var(--rand);
-      border-radius: 10px;
-      background: #f8fdf9;
-      color: var(--tekst);
-      outline: none;
-      -webkit-appearance: none;
+    input[type="date"], input[type="time"],
+    input[type="text"], input[type="password"] {
+      width: 100%; padding: 13px 14px; font-size: 1rem;
+      border: 1.5px solid var(--rand); border-radius: 10px;
+      background: #f8fdf9; color: var(--tekst);
+      outline: none; -webkit-appearance: none;
       transition: border-color 0.15s;
     }
+    input:focus { border-color: var(--groen); background: white; }
 
-    input:focus {
-      border-color: var(--groen);
-      background: white;
-    }
-
-    .tijd-rij {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-
-    .tijden-snel {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 8px;
-    }
-
+    .tijden-snel { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
     .tijden-snel button {
-      padding: 6px 13px;
-      border-radius: 20px;
-      border: 1.5px solid var(--rand);
-      background: white;
-      color: var(--subtekst);
-      font-size: 0.85rem;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.15s;
+      padding: 6px 13px; border-radius: 20px;
+      border: 1.5px solid var(--rand); background: white;
+      color: var(--subtekst); font-size: 0.85rem;
+      font-weight: 500; cursor: pointer; transition: all 0.15s;
+    }
+    .tijden-snel button.actief, .tijden-snel button:hover {
+      border-color: var(--groen); background: var(--groen-bg); color: var(--groen);
     }
 
-    .tijden-snel button.actief,
-    .tijden-snel button:hover {
-      border-color: var(--groen);
-      background: var(--groen-bg);
-      color: var(--groen);
-    }
-
-    .partners-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 10px;
-    }
-
+    .partners-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
     .chip {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      background: var(--groen-bg);
-      border: 1.5px solid var(--groen-licht);
-      border-radius: 20px;
-      font-size: 0.85rem;
-      color: var(--groen);
-      font-weight: 500;
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 12px; background: var(--groen-bg);
+      border: 1.5px solid var(--groen-licht); border-radius: 20px;
+      font-size: 0.85rem; color: var(--groen); font-weight: 500;
     }
-
     .chip-verwijder {
-      background: none;
-      border: none;
-      color: var(--groen);
-      cursor: pointer;
-      font-size: 1rem;
-      line-height: 1;
-      padding: 0;
-      opacity: 0.7;
+      background: none; border: none; color: var(--groen);
+      cursor: pointer; font-size: 1rem; line-height: 1; padding: 0; opacity: 0.7;
     }
-
-    .partner-invoer {
-      display: flex;
-      gap: 8px;
-    }
-
-    .partner-invoer input {
-      flex: 1;
-    }
-
+    .partner-invoer { display: flex; gap: 8px; }
+    .partner-invoer input { flex: 1; }
     .btn-toevoegen {
-      padding: 0 16px;
-      background: var(--groen-bg);
-      border: 1.5px solid var(--groen-licht);
-      color: var(--groen);
-      border-radius: 10px;
-      font-size: 1.3rem;
-      font-weight: 600;
-      cursor: pointer;
-      white-space: nowrap;
+      padding: 0 16px; background: var(--groen-bg);
+      border: 1.5px solid var(--groen-licht); color: var(--groen);
+      border-radius: 10px; font-size: 1.3rem; font-weight: 600;
+      cursor: pointer; white-space: nowrap;
     }
-
     .btn-intro-toggle {
-      font-size: 0.8rem;
-      color: var(--groen);
-      background: none;
-      border: none;
-      padding: 0;
-      cursor: pointer;
-      margin-top: 6px;
+      font-size: 0.8rem; color: var(--groen); background: none;
+      border: none; padding: 0; cursor: pointer; margin-top: 6px;
       text-decoration: underline;
     }
-
     .intro-velden {
-      margin-top: 12px;
-      padding-top: 12px;
+      margin-top: 12px; padding-top: 12px;
       border-top: 1px solid var(--rand);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+      display: flex; flex-direction: column; gap: 10px;
     }
 
     .btn-plan {
-      width: 100%;
-      padding: 17px;
-      background: var(--groen);
-      color: white;
-      border: none;
-      border-radius: 14px;
-      font-size: 1.05rem;
-      font-weight: 700;
-      cursor: pointer;
-      letter-spacing: -0.2px;
-      transition: background 0.15s, transform 0.1s;
+      width: 100%; padding: 17px; background: var(--groen);
+      color: white; border: none; border-radius: 14px;
+      font-size: 1.05rem; font-weight: 700; cursor: pointer;
+      letter-spacing: -0.2px; transition: background 0.15s, transform 0.1s;
       margin-top: 4px;
     }
-
     .btn-plan:active { transform: scale(0.98); }
     .btn-plan:hover { background: #217a55; }
-    .btn-plan:disabled {
-      background: #b0c9bc;
-      cursor: default;
-      transform: none;
-    }
+    .btn-plan:disabled { background: #b0c9bc; cursor: default; transform: none; }
 
     .melding {
-      padding: 14px 16px;
-      border-radius: 12px;
-      font-size: 0.9rem;
-      font-weight: 500;
-      display: none;
+      padding: 14px 16px; border-radius: 12px;
+      font-size: 0.9rem; font-weight: 500; display: none;
     }
-
     .melding.succes {
-      background: var(--groen-bg);
-      color: var(--groen);
-      border: 1.5px solid var(--groen-licht);
-      display: block;
+      background: var(--groen-bg); color: var(--groen);
+      border: 1.5px solid var(--groen-licht); display: block;
     }
-
     .melding.fout {
-      background: var(--fout-bg);
-      color: var(--fout);
+      background: var(--fout-bg); color: var(--fout);
+      border: 1.5px solid #e8b4b0; display: block;
+    }
+
+    /* ── Overzicht tab ── */
+    .reservering-kaart {
+      background: var(--wit); border-radius: 14px;
+      padding: 16px 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .reservering-header {
+      display: flex; align-items: flex-start;
+      justify-content: space-between; gap: 10px;
+    }
+    .reservering-datum {
+      font-size: 1rem; font-weight: 700; color: var(--tekst);
+    }
+    .reservering-tijd {
+      font-size: 0.85rem; color: var(--subtekst); margin-top: 2px;
+    }
+    .badge {
+      flex-shrink: 0; padding: 4px 10px; border-radius: 20px;
+      font-size: 0.75rem; font-weight: 700; white-space: nowrap;
+    }
+    .badge-geboekt {
+      background: var(--groen-bg); color: var(--groen);
+      border: 1.5px solid var(--groen-licht);
+    }
+    .badge-wachtrij {
+      background: var(--oranje-bg); color: var(--oranje);
+      border: 1.5px solid #fcd34d;
+    }
+    .badge-mislukt {
+      background: var(--fout-bg); color: var(--fout);
       border: 1.5px solid #e8b4b0;
-      display: block;
     }
-
-    /* Instellingen-overlay */
-    .overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.5);
-      z-index: 100;
-      align-items: flex-end;
-      justify-content: center;
+    .reservering-partners {
+      font-size: 0.85rem; color: var(--subtekst);
+      display: flex; align-items: center; gap: 6px;
     }
-
-    .overlay.open { display: flex; }
-
-    .overlay-inhoud {
-      background: white;
-      width: 100%;
-      max-width: 480px;
-      border-radius: 20px 20px 0 0;
-      padding: 24px 20px 40px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
+    .reservering-opent {
+      font-size: 0.78rem; color: var(--oranje);
+      background: var(--oranje-bg); border-radius: 8px;
+      padding: 5px 10px; margin-top: 2px;
     }
-
-    .overlay-inhoud h2 {
-      font-size: 1.05rem;
-      font-weight: 700;
+    .leeg-melding {
+      text-align: center; color: var(--subtekst);
+      font-size: 0.9rem; padding: 40px 20px;
     }
-
-    .overlay-inhoud p {
-      font-size: 0.82rem;
+    .laad-melding {
+      text-align: center; color: var(--subtekst);
+      font-size: 0.9rem; padding: 30px 20px;
+    }
+    .overzicht-header {
+      display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: 4px;
+    }
+    .overzicht-header h2 {
+      font-size: 0.8rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.8px;
       color: var(--subtekst);
-      line-height: 1.5;
+    }
+    .btn-vernieuwen {
+      background: none; border: none; color: var(--groen);
+      font-size: 1rem; cursor: pointer; padding: 4px;
     }
 
-    .overlay-inhoud a {
-      color: var(--groen);
+    /* ── Tab-balk ── */
+    .tab-balk {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      height: var(--tab-h);
+      background: white;
+      border-top: 1px solid var(--rand);
+      display: flex;
+      z-index: 20;
+      padding-bottom: env(safe-area-inset-bottom);
     }
+    .tab-knop {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 3px; background: none; border: none;
+      cursor: pointer; color: #94a3a0;
+      font-size: 0.7rem; font-weight: 600;
+      letter-spacing: 0.3px; transition: color 0.15s;
+    }
+    .tab-knop .tab-icoon { font-size: 1.4rem; line-height: 1; }
+    .tab-knop.actief { color: var(--groen); }
+    .tab-knop.actief .tab-icoon { transform: scale(1.05); }
 
+    /* ── Instellingen overlay ── */
+    .overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5); z-index: 100;
+      align-items: flex-end; justify-content: center;
+    }
+    .overlay.open { display: flex; }
+    .overlay-inhoud {
+      background: white; width: 100%; max-width: 480px;
+      border-radius: 20px 20px 0 0; padding: 24px 20px 40px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .overlay-inhoud h2 { font-size: 1.05rem; font-weight: 700; }
+    .overlay-inhoud p { font-size: 0.82rem; color: var(--subtekst); line-height: 1.5; }
+    .overlay-inhoud a { color: var(--groen); }
     .btn-opslaan {
-      width: 100%;
-      padding: 14px;
-      background: var(--groen);
-      color: white;
-      border: none;
-      border-radius: 12px;
-      font-size: 0.95rem;
-      font-weight: 700;
-      cursor: pointer;
+      width: 100%; padding: 14px; background: var(--groen);
+      color: white; border: none; border-radius: 12px;
+      font-size: 0.95rem; font-weight: 700; cursor: pointer;
     }
-
     .btn-sluiten {
-      background: #f0f0f0;
-      color: #555;
-      width: 100%;
-      padding: 12px;
-      border: none;
-      border-radius: 12px;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
+      background: #f0f0f0; color: #555; width: 100%;
+      padding: 12px; border: none; border-radius: 12px;
+      font-size: 0.9rem; font-weight: 600; cursor: pointer;
     }
 
-    /* Loading spinner op knop */
+    /* ── Spinner ── */
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinner {
-      display: inline-block;
-      width: 18px;
-      height: 18px;
+      display: inline-block; width: 18px; height: 18px;
       border: 2.5px solid rgba(255,255,255,0.4);
-      border-top-color: white;
-      border-radius: 50%;
+      border-top-color: white; border-radius: 50%;
       animation: spin 0.7s linear infinite;
-      vertical-align: middle;
-      margin-right: 6px;
+      vertical-align: middle; margin-right: 6px;
+    }
+    @keyframes spin-groen { to { transform: rotate(360deg); } }
+    .spinner-groen {
+      display: inline-block; width: 20px; height: 20px;
+      border: 2.5px solid var(--rand);
+      border-top-color: var(--groen); border-radius: 50%;
+      animation: spin-groen 0.7s linear infinite;
+      margin: 0 auto 8px; display: block;
     }
   </style>
 </head>
@@ -365,10 +303,10 @@
   <button class="btn-instellingen" onclick="toggleInstellingen()" title="Instellingen">⚙️</button>
 </header>
 
-<main>
+<!-- ── Tab: Plannen ── -->
+<div id="tab-plannen" class="tab-inhoud actief">
   <div id="melding" class="melding"></div>
 
-  <!-- Datum & Tijd -->
   <div class="kaart">
     <h2>Wanneer?</h2>
     <div class="veld">
@@ -395,7 +333,6 @@
     </div>
   </div>
 
-  <!-- Partners -->
   <div class="kaart">
     <h2>Partners</h2>
     <div id="partner-chips" class="partners-chips"></div>
@@ -408,16 +345,38 @@
     <div class="intro-velden" id="intro-velden" style="display:none">
       <div class="veld" style="margin:0">
         <label for="intro-naam">Naam introducé</label>
-        <input type="text" id="intro-naam" placeholder="Naam (gebruik + voor introducés)" autocomplete="off" />
+        <input type="text" id="intro-naam" placeholder="Naam introducé" autocomplete="off" />
       </div>
     </div>
   </div>
 
-  <!-- Knop -->
   <button class="btn-plan" id="plan-knop" onclick="planReservering()">Reservering inplannen</button>
-</main>
+</div>
 
-<!-- Instellingen overlay -->
+<!-- ── Tab: Overzicht ── -->
+<div id="tab-overzicht" class="tab-inhoud">
+  <div class="overzicht-header">
+    <h2 style="font-size:0.8rem;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--subtekst)">Reserveringen</h2>
+    <button class="btn-vernieuwen" onclick="laadOverzicht()" title="Vernieuwen">↻</button>
+  </div>
+  <div id="overzicht-lijst">
+    <div class="laad-melding">Laden…</div>
+  </div>
+</div>
+
+<!-- ── Tab-balk ── -->
+<nav class="tab-balk">
+  <button class="tab-knop actief" id="knop-plannen" onclick="wisselTab('plannen')">
+    <span class="tab-icoon">🎾</span>
+    Plannen
+  </button>
+  <button class="tab-knop" id="knop-overzicht" onclick="wisselTab('overzicht')">
+    <span class="tab-icoon">📋</span>
+    Overzicht
+  </button>
+</nav>
+
+<!-- ── Instellingen overlay ── -->
 <div class="overlay" id="overlay">
   <div class="overlay-inhoud">
     <h2>⚙️ Instellingen</h2>
@@ -438,16 +397,134 @@
 </div>
 
 <script>
-  const REPO = "Masai17/test123";
+  const REPO     = "Masai17/test123";
   const WORKFLOW = "plan_reservering.yml";
-  let partners = [];
+  const RAW_JSON = `https://raw.githubusercontent.com/${REPO}/main/reserveringen.json`;
+  const NL_TZ    = "Europe/Amsterdam";
+
+  let partners    = [];
   let gekozenTijd = null;
 
-  // Datum standaard op vandaag zetten
+  // Standaard datum morgen
   const d = new Date();
-  d.setDate(d.getDate() + 1); // morgen als standaard
+  d.setDate(d.getDate() + 1);
   document.getElementById("datum").value = d.toISOString().slice(0, 10);
 
+  /* ── Tab-wisseling ── */
+  function wisselTab(naam) {
+    ["plannen", "overzicht"].forEach(t => {
+      document.getElementById(`tab-${t}`).classList.toggle("actief", t === naam);
+      document.getElementById(`knop-${t}`).classList.toggle("actief", t === naam);
+    });
+    if (naam === "overzicht") laadOverzicht();
+  }
+
+  /* ── Overzicht laden ── */
+  async function laadOverzicht() {
+    const lijst = document.getElementById("overzicht-lijst");
+    lijst.innerHTML = '<div class="laad-melding"><span class="spinner-groen"></span>Laden…</div>';
+
+    try {
+      const resp = await fetch(`${RAW_JSON}?t=${Date.now()}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+
+      if (!data.length) {
+        lijst.innerHTML = '<div class="leeg-melding">Nog geen reserveringen gepland.</div>';
+        return;
+      }
+
+      // Nieuwste eerst
+      const gesorteerd = [...data].reverse();
+      lijst.innerHTML = gesorteerd.map(r => renderReservering(r)).join("");
+
+    } catch (e) {
+      lijst.innerHTML = `<div class="leeg-melding" style="color:var(--fout)">Kon reserveringen niet laden.<br><small>${e.message}</small></div>`;
+    }
+  }
+
+  function renderReservering(r) {
+    const tekst = r.speeltijd.trim();
+
+    // Datumtekst opmaken
+    let datumLabel = tekst;
+    let tijdLabel  = "";
+    for (const fmt of [/^(\d{1,2})-(\d{1,2})-(\d{4}) (\d{2}:\d{2})$/, /^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})$/]) {
+      const m = tekst.match(fmt);
+      if (m) {
+        try {
+          // Bouw een Date-object
+          let dt;
+          if (tekst.match(/^\d{4}/)) {
+            dt = new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:00`);
+          } else {
+            dt = new Date(`${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}T${m[4]}:00`);
+          }
+          datumLabel = dt.toLocaleDateString("nl-NL", { weekday:"long", day:"numeric", month:"long", year:"numeric" });
+          tijdLabel  = m[4];
+        } catch {}
+        break;
+      }
+    }
+
+    // Status bepalen
+    let badge, extra = "";
+    if (r.gedaan) {
+      badge = '<span class="badge badge-geboekt">✅ Geboekt</span>';
+    } else {
+      // Bereken openingstijd (speeltijd − 36u)
+      let openingStr = "";
+      try {
+        const delenDD = tekst.match(/^(\d{1,2})-(\d{1,2})-(\d{4}) (\d{2}):(\d{2})/);
+        const delenYY = tekst.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/);
+        let speelMs;
+        if (delenDD) {
+          speelMs = new Date(`${delenDD[3]}-${delenDD[2].padStart(2,"0")}-${delenDD[1].padStart(2,"0")}T${delenDD[4]}:${delenDD[5]}:00`).getTime();
+        } else if (delenYY) {
+          speelMs = new Date(`${delenYY[1]}-${delenYY[2]}-${delenYY[3]}T${delenYY[4]}:${delenYY[5]}:00`).getTime();
+        }
+        if (speelMs) {
+          const openingMs  = speelMs - 36 * 3600 * 1000;
+          const nuMs        = Date.now();
+          const openingDate = new Date(openingMs);
+          const openingNL   = openingDate.toLocaleString("nl-NL", {
+            day:"numeric", month:"short", hour:"2-digit", minute:"2-digit"
+          });
+          if (openingMs > nuMs) {
+            badge = '<span class="badge badge-wachtrij">⏳ Wachtrij</span>';
+            extra = `<div class="reservering-opent">Boekingsvenster opent ${openingNL}</div>`;
+          } else if (speelMs > nuMs) {
+            badge = '<span class="badge badge-wachtrij">⏳ Wachtrij</span>';
+            extra = `<div class="reservering-opent">Boekingsvenster al open — watcher reserveert</div>`;
+          } else {
+            badge = '<span class="badge badge-mislukt">⚠️ Niet geboekt</span>';
+          }
+        }
+      } catch {}
+      if (!badge) badge = '<span class="badge badge-wachtrij">⏳ Wachtrij</span>';
+    }
+
+    // Partners opmaken
+    const partnerLijst = (r.partners || "")
+      .split(",").map(p => p.trim()).filter(Boolean)
+      .map(p => p.startsWith("+") ? `${p.slice(1)} (introducé)` : p)
+      .join(" · ");
+
+    return `
+      <div class="reservering-kaart">
+        <div class="reservering-header">
+          <div>
+            <div class="reservering-datum">${datumLabel}</div>
+            ${tijdLabel ? `<div class="reservering-tijd">🕐 ${tijdLabel}</div>` : ""}
+          </div>
+          ${badge}
+        </div>
+        ${partnerLijst ? `<div class="reservering-partners">👥 ${partnerLijst}</div>` : ""}
+        ${extra}
+      </div>`;
+  }
+
+  /* ── Formulier ── */
   function kiesTijd(t) {
     gekozenTijd = t;
     document.getElementById("tijd").value = t;
@@ -480,8 +557,7 @@
   }
 
   function renderChips() {
-    const container = document.getElementById("partner-chips");
-    container.innerHTML = partners.map((p, i) =>
+    document.getElementById("partner-chips").innerHTML = partners.map((p, i) =>
       `<span class="chip">${p} <button class="chip-verwijder" onclick="verwijderPartner(${i})">✕</button></span>`
     ).join("");
   }
@@ -489,35 +565,33 @@
   function toggleIntro() {
     const velden = document.getElementById("intro-velden");
     const toggle = document.getElementById("intro-toggle");
-    const open = velden.style.display !== "none";
-    velden.style.display = open ? "none" : "flex";
-    toggle.textContent = open ? "＋ Introducé toevoegen" : "− Introducé verbergen";
+    const open   = velden.style.display !== "none";
+    velden.style.display  = open ? "none" : "flex";
+    toggle.textContent    = open ? "＋ Introducé toevoegen" : "− Introducé verbergen";
   }
 
+  /* ── Reservering inplannen ── */
   async function planReservering() {
     const token = localStorage.getItem("padel_token");
     if (!token) {
       toonMelding("fout", "Geen token ingesteld. Tik op ⚙️ om je GitHub token in te voeren.");
       return;
     }
-
     const datum = document.getElementById("datum").value;
-    const tijd = document.getElementById("tijd").value;
+    const tijd  = document.getElementById("tijd").value;
     if (!datum) { toonMelding("fout", "Kies een datum."); return; }
-    if (!tijd) { toonMelding("fout", "Kies een tijd."); return; }
+    if (!tijd)  { toonMelding("fout", "Kies een tijd.");  return; }
 
-    // Converteer YYYY-MM-DD → DD-MM-YYYY
-    const [j, m, dag] = datum.split("-");
+    const [j, m, dag]  = datum.split("-");
     const speelDatumTijd = `${dag}-${m}-${j} ${tijd}`;
 
-    // Bouw partners-string op
-    const introNaam = document.getElementById("intro-naam").value.trim();
-    let allePartners = [...partners];
+    const introNaam   = document.getElementById("intro-naam").value.trim();
+    let allePartners  = [...partners];
     if (introNaam) allePartners.push(`+${introNaam}`);
     const partnersStr = allePartners.join(",");
 
     const knop = document.getElementById("plan-knop");
-    knop.disabled = true;
+    knop.disabled  = true;
     knop.innerHTML = '<span class="spinner"></span>Bezig…';
 
     try {
@@ -532,17 +606,12 @@
           },
           body: JSON.stringify({
             ref: "main",
-            inputs: {
-              speel_datum_tijd: speelDatumTijd,
-              partners: partnersStr
-            }
+            inputs: { speel_datum_tijd: speelDatumTijd, partners: partnersStr }
           })
         }
       );
-
       if (resp.status === 204) {
         toonMelding("succes", `✅ Ingepland: ${speelDatumTijd}${partnersStr ? ` met ${allePartners.join(", ")}` : ""}.\n\nDe watcher reserveert automatisch zodra het boekingsvenster opengaat.`);
-        // Reset form
         partners = [];
         renderChips();
         document.getElementById("intro-naam").value = "";
@@ -555,44 +624,37 @@
     } catch (e) {
       toonMelding("fout", `❌ Netwerkfout: ${e.message}`);
     }
-
-    knop.disabled = false;
+    knop.disabled  = false;
     knop.textContent = "Reservering inplannen";
   }
 
   function toonMelding(type, tekst) {
     const el = document.getElementById("melding");
-    el.className = `melding ${type}`;
+    el.className  = `melding ${type}`;
     el.textContent = tekst;
     el.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
+  /* ── Instellingen ── */
   function toggleInstellingen() {
     const overlay = document.getElementById("overlay");
     overlay.classList.toggle("open");
     if (overlay.classList.contains("open")) {
       const opgeslagen = localStorage.getItem("padel_token") || "";
       document.getElementById("token-invoer").value = opgeslagen
-        ? opgeslagen.slice(0, 4) + "…" + opgeslagen.slice(-4)
-        : "";
+        ? opgeslagen.slice(0, 4) + "…" + opgeslagen.slice(-4) : "";
     }
   }
 
   function slaTokenOp() {
     const inp = document.getElementById("token-invoer").value.trim();
-    if (!inp || inp.includes("…")) {
-      toggleInstellingen();
-      return;
-    }
+    if (!inp || inp.includes("…")) { toggleInstellingen(); return; }
     localStorage.setItem("padel_token", inp);
     toggleInstellingen();
     toonMelding("succes", "✅ Token opgeslagen.");
   }
 
-  // Toon instellingen als er nog geen token is
-  if (!localStorage.getItem("padel_token")) {
-    setTimeout(toggleInstellingen, 400);
-  }
+  if (!localStorage.getItem("padel_token")) setTimeout(toggleInstellingen, 400);
 </script>
 </body>
 </html>
