@@ -13,5 +13,10 @@
     "speeltijd": "12-05-2026 20:30",
     "partners": "Yorrick Bussink,Rens Dekker,Wieteke Veldhuizen",
     "gedaan": true
+  },
+  {
+    "speeltijd": "01-06-2026 20:30",
+    "partners": "test",
+    "gedaan": false
   }
 ]
