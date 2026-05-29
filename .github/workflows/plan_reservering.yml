@@ -135,3 +135,32 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: xvfb-run --auto-servernum python padel_reserveer.py
 
+      - name: Sla reservering op als gedaan
+        if: steps.bereken.outputs.actie == 'reserveer_nu'
+        env:
+          SPEEL_DATUM_TIJD: ${{ github.event.inputs.speel_datum_tijd }}
+          PARTNERS: ${{ github.event.inputs.partners }}
+        run: |
+          python3 << 'PYEOF'
+          import json, os
+          tekst    = os.environ["SPEEL_DATUM_TIJD"].strip()
+          partners = os.environ.get("PARTNERS", "").strip()
+          bestand  = "reserveringen.json"
+          reserveringen = json.load(open(bestand)) if os.path.exists(bestand) else []
+          for r in reserveringen:
+              if r["speeltijd"].strip() == tekst:
+                  r["gedaan"] = True
+                  break
+          else:
+              reserveringen.append({"speeltijd": tekst, "partners": partners, "gedaan": True})
+          with open(bestand, "w") as f:
+              json.dump(reserveringen, f, indent=2)
+          print(f"Opgeslagen als gedaan: {tekst}")
+          PYEOF
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add reserveringen.json
+          git pull --rebase --autostash
+          git commit -m "Reservering uitgevoerd: ${{ github.event.inputs.speel_datum_tijd }}"
+          git push
+
