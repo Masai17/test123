@@ -92,9 +92,10 @@ jobs:
       - name: Python + Playwright installeren
         if: steps.check.outputs.moet_reserveren == 'ja'
         run: |
-          pip install playwright -q
+          pip install playwright playwright-stealth -q
           playwright install chromium
           playwright install-deps chromium
+          sudo apt-get install -y xvfb
  
       - name: Reserveren
         if: steps.check.outputs.moet_reserveren == 'ja'
@@ -106,7 +107,7 @@ jobs:
           SPEEL_DATUM_TIJD: ${{ steps.check.outputs.speel_datum_tijd }}
           PARTNERS: ${{ steps.check.outputs.partners }}
           PYTHONUNBUFFERED: "1"
-        run: python padel_reserveer.py
+        run: xvfb-run --auto-servernum python padel_reserveer.py
 
       - name: Upload Playwright video
         if: always() && steps.check.outputs.moet_reserveren == 'ja'
