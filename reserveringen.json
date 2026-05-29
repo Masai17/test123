@@ -3,5 +3,10 @@
     "speeltijd": "01-06-2026 20:30",
     "partners": "test",
     "gedaan": false
+  },
+  {
+    "speeltijd": "29-05-2026 16:30",
+    "partners": "",
+    "gedaan": true
   }
 ]
