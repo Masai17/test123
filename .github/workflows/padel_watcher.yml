@@ -109,14 +109,6 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: xvfb-run --auto-servernum python padel_reserveer.py
 
-      - name: Upload Playwright video
-        if: always() && steps.check.outputs.moet_reserveren == 'ja'
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-video
-          path: /tmp/playwright_video/
-          retention-days: 3
-
       - name: Markeer als gedaan
         if: steps.check.outputs.moet_reserveren == 'ja'
         run: |
