@@ -648,12 +648,33 @@
     }
   }
 
-  function slaTokenOp() {
+  async function slaTokenOp() {
     const inp = document.getElementById("token-invoer").value.trim();
     if (!inp || inp.includes("…")) { toggleInstellingen(); return; }
-    localStorage.setItem("padel_token", inp);
-    toggleInstellingen();
-    toonMelding("succes", "✅ Token opgeslagen.");
+
+    // Verifieer token vóór opslaan
+    const testBtn = document.querySelector(".btn-opslaan");
+    testBtn.disabled = true;
+    testBtn.textContent = "Controleren…";
+
+    try {
+      const r = await fetch("https://api.github.com/user", {
+        headers: { "Authorization": `Bearer ${inp}`, "Accept": "application/vnd.github+json" }
+      });
+      const scopes = r.headers.get("x-oauth-scopes") || "(niet zichtbaar bij fine-grained token)";
+      if (!r.ok) {
+        testBtn.disabled = false; testBtn.textContent = "Opslaan";
+        toonMelding("fout", `❌ Token ongeldig (${r.status}). Controleer of je het goed gekopieerd hebt.`);
+        return;
+      }
+      const user = await r.json();
+      localStorage.setItem("padel_token", inp);
+      toggleInstellingen();
+      toonMelding("succes", `✅ Token opgeslagen. Ingelogd als: ${user.login}\nScopes: ${scopes}`);
+    } catch (e) {
+      toonMelding("fout", `❌ Netwerkfout bij tokencheck: ${e.message}`);
+    }
+    testBtn.disabled = false; testBtn.textContent = "Opslaan";
   }
 
   if (!localStorage.getItem("padel_token")) setTimeout(toggleInstellingen, 400);
