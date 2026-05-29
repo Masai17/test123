@@ -127,8 +127,8 @@ jobs:
           PYEOF
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git pull --rebase
           git add reserveringen.json
+          git pull --rebase --autostash
           git commit -m "Reservering uitgevoerd: ${{ steps.check.outputs.speel_datum_tijd }}"
           git push
         env:
