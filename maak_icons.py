@@ -8,10 +8,10 @@ r_w, r_h = racket.size
 
 def maak_icon(maat, bestand):
     canvas = Image.new("RGBA", (maat, maat), GROEN + (255,))
-    doel_w = int(maat * 0.92)
+    doel_w = int(maat * 0.98)
     doel_h = int(doel_w * r_h / r_w)
-    if doel_h > int(maat * 0.92):
-        doel_h = int(maat * 0.92)
+    if doel_h > int(maat * 0.98):
+        doel_h = int(maat * 0.98)
         doel_w = int(doel_h * r_w / r_h)
     geschaald = racket.resize((doel_w, doel_h), Image.LANCZOS)
     x = (maat - doel_w) // 2
