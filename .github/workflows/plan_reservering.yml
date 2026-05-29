@@ -138,6 +138,14 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: xvfb-run --auto-servernum python padel_reserveer.py
 
+      - name: Upload screenshot bij falen
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: padel-screenshot
+          path: /tmp/padel_screenshot.png
+          retention-days: 3
+
       - name: Sla reservering op als gedaan
         if: steps.bereken.outputs.actie == 'reserveer_nu'
         env:

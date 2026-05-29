@@ -241,8 +241,8 @@ async def reserveer(speeltijd, baan_volgorde, partners):
 
         # Stap 4: Dag + dagdeel
         print("Dag: " + zoek_tekst + " dagdeel: " + dagdeel)
-        await asyncio.sleep(1)  # geef pagina tijd om volledig te laden na Volgende
- 
+        await asyncio.sleep(1)
+
         for _ in range(8):
             try:
                 zichtbaar = await page.evaluate(
@@ -261,10 +261,11 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                 await asyncio.sleep(0.5)
             except PWTimeout:
                 break
- 
+
         dag_geklikt = False
+        dag_el      = None
+        dag_x       = None
         try:
-            dag_x   = None
             alle_els = page.locator("td, th, div, span")
             for i in range(await alle_els.count()):
                 el = alle_els.nth(i)
@@ -273,15 +274,17 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                     if zoek_tekst.lower() in tekst.lower():
                         box = await el.bounding_box()
                         if box and box["width"] > 0:
-                            dag_x = box["x"] + box["width"] / 2
+                            dag_x  = box["x"] + box["width"] / 2
+                            dag_el = el
                             print("  Kolom gevonden op x=" + str(round(dag_x)))
                             break
                 except Exception:
                     continue
- 
+
             if dag_x is not None:
-                dagdeel_els  = page.locator("td, div")
-                beste_el     = None
+                # Probeer het exacte dagdeel te klikken
+                dagdeel_els   = page.locator("td, div")
+                beste_el      = None
                 beste_afstand = 9999
                 for i in range(await dagdeel_els.count()):
                     el = dagdeel_els.nth(i)
@@ -298,16 +301,24 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                             beste_el      = el
                     except Exception:
                         continue
- 
+
                 if beste_el is not None:
                     await beste_el.scroll_into_view_if_needed()
                     await beste_el.click()
                     print("  Dagdeel geklikt: " + dagdeel)
                     dag_geklikt = True
+                else:
+                    # Dagdeel niet gevonden — klik de dag-kolom zelf als fallback
+                    print("  Dagdeel '" + dagdeel + "' niet gevonden, klik dag-kolom als fallback")
+                    await dag_el.scroll_into_view_if_needed()
+                    await dag_el.click()
+                    await asyncio.sleep(0.5)
+                    dag_geklikt = True
         except Exception as e:
             print("  Dag fout: " + str(e))
- 
+
         if not dag_geklikt:
+            await page.screenshot(path="/tmp/padel_screenshot.png")
             raise RuntimeError("DAG NIET GEVONDEN IN KALENDER: " + zoek_tekst + " / " + dagdeel)
 
         await asyncio.sleep(0.5)
@@ -326,6 +337,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                 break
  
         if not gekozen_baan:
+            await page.screenshot(path="/tmp/padel_screenshot.png")
             raise RuntimeError("GEEN BAAN BESCHIKBAAR - reservering afgebroken")
 
         url_voor_confirm = page.url
@@ -358,6 +370,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
             except Exception:
                 pass
         if not bevestigd:
+            await page.screenshot(path="/tmp/padel_screenshot.png")
             raise RuntimeError("BEVESTIGEN MISLUKT: knop niet gevonden")
 
         # Stap 7: Verifieer bevestiging op de pagina
@@ -375,6 +388,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
 
         if is_homepage or is_nog_op_confirm:
             if not heeft_succes_tekst:
+                await page.screenshot(path="/tmp/padel_screenshot.png")
                 raise RuntimeError("RESERVERING NIET BEVESTIGD: teruggestuurd naar " + url_na)
 
         baan_naam = "Baan " + gekozen_baan
