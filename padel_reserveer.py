@@ -349,11 +349,21 @@ async def reserveer(speeltijd, baan_volgorde, partners):
             except Exception:
                 pass
         if not bevestigd:
-            print("  BEVESTIGEN MISLUKT!")
- 
-        baan_naam = "Baan " + (gekozen_baan or "?")
-        eind      = speeltijd + timedelta(hours=1)
-        print("KLAAR! " + baan_naam + " op " + speeltijd.strftime('%d-%m-%Y') + " om " + tijd_str + "-" + eind.strftime('%H:%M'))
+            raise RuntimeError("BEVESTIGEN MISLUKT: knop niet gevonden")
+
+        # Stap 7: Verifieer bevestiging op de pagina
+        await asyncio.sleep(1)
+        url_na = page.url
+        print("  URL na bevestiging: " + url_na)
+        pagina = (await page.content()).lower()
+        succes_woorden = ["bevestigd", "gereserveerd", "gelukt", "succesvol", "bedankt",
+                          "confirmed", "reservation confirmed", "your reservation"]
+        if any(w in pagina for w in succes_woorden) or "reservationsconfirm" not in url_na.lower():
+            baan_naam = "Baan " + (gekozen_baan or "?")
+            eind      = speeltijd + timedelta(hours=1)
+            print("KLAAR! " + baan_naam + " op " + speeltijd.strftime('%d-%m-%Y') + " om " + tijd_str + "-" + eind.strftime('%H:%M'))
+        else:
+            raise RuntimeError("RESERVERING NIET BEVESTIGD: pagina toont geen bevestiging (url=" + url_na + ")")
  
  
 async def main():
