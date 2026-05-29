@@ -233,9 +233,12 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                 print("  WAARSCHUWING: " + partner + " niet gevonden")
             await asyncio.sleep(0.5)
  
+        url_voor_dag = page.url
         await klik_volgende(page)
+        if page.url == url_voor_dag:
+            raise RuntimeError("Pagina niet vooruitgegaan na partners-stap (URL: " + page.url + ")")
         print("  URL na partners: " + page.url)
- 
+
         # Stap 4: Dag + dagdeel
         print("Dag: " + zoek_tekst + " dagdeel: " + dagdeel)
         await asyncio.sleep(1)  # geef pagina tijd om volledig te laden na Volgende
@@ -267,7 +270,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                 el = alle_els.nth(i)
                 try:
                     tekst = (await el.inner_text()).strip()
-                    if tekst.split("\n")[0].strip().lower() == zoek_tekst.lower():
+                    if zoek_tekst.lower() in tekst.lower():
                         box = await el.bounding_box()
                         if box and box["width"] > 0:
                             dag_x = box["x"] + box["width"] / 2
@@ -284,7 +287,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                     el = dagdeel_els.nth(i)
                     try:
                         tekst = (await el.inner_text()).strip()
-                        if tekst != dagdeel:
+                        if tekst.lower() != dagdeel.lower():
                             continue
                         box = await el.bounding_box()
                         if not box or box["width"] <= 0:
@@ -305,10 +308,13 @@ async def reserveer(speeltijd, baan_volgorde, partners):
             print("  Dag fout: " + str(e))
  
         if not dag_geklikt:
-            print("  DAG NIET GEKLIKT!")
- 
+            raise RuntimeError("DAG NIET GEVONDEN IN KALENDER: " + zoek_tekst + " / " + dagdeel)
+
         await asyncio.sleep(0.5)
+        url_voor_baan = page.url
         await klik_volgende(page)
+        if page.url == url_voor_baan:
+            raise RuntimeError("Pagina niet vooruitgegaan na dag-stap (URL: " + page.url + ")")
         print("  URL na dag: " + page.url)
  
         # Stap 5: Tijdcel - probeer banen in volgorde
@@ -322,7 +328,10 @@ async def reserveer(speeltijd, baan_volgorde, partners):
         if not gekozen_baan:
             raise RuntimeError("GEEN BAAN BESCHIKBAAR - reservering afgebroken")
 
+        url_voor_confirm = page.url
         await klik_volgende(page)
+        if page.url == url_voor_confirm:
+            raise RuntimeError("Pagina niet vooruitgegaan na baan-stap (URL: " + page.url + ")")
         print("  URL na baan: " + page.url)
  
         # Stap 6: Bevestigen

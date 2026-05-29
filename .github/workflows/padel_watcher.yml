@@ -92,7 +92,8 @@ jobs:
       - name: Python + Playwright installeren
         if: steps.check.outputs.moet_reserveren == 'ja'
         run: |
-          pip install playwright playwright-stealth -q
+          pip install playwright -q
+          pip install playwright-stealth==1.0.6 || echo "playwright-stealth niet geïnstalleerd"
           playwright install chromium
           playwright install-deps chromium
           sudo apt-get install -y xvfb
