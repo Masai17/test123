@@ -90,15 +90,16 @@
     .veld:last-child { margin-bottom: 0; }
     label { font-size: 0.85rem; font-weight: 600; color: var(--subtekst); }
 
-    input[type="date"], input[type="time"],
-    input[type="text"], input[type="password"] {
+    input[type="date"],
+    input[type="text"], input[type="password"], select {
       width: 100%; padding: 13px 14px; font-size: 1rem;
       border: 1.5px solid var(--rand); border-radius: 10px;
       background: #f8fdf9; color: var(--tekst);
       outline: none; -webkit-appearance: none;
       transition: border-color 0.15s;
     }
-    input:focus { border-color: var(--groen); background: white; }
+    input:focus, select:focus { border-color: var(--groen); background: white; }
+    select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%234a6657' d='M6 8L0 0h12z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
 
     .tijden-snel { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
     .tijden-snel button {
@@ -331,7 +332,23 @@
         <button onclick="kiesTijd('20:30')">20:30</button>
         <button onclick="kiesTijd('21:30')">21:30</button>
       </div>
-      <input type="time" id="tijd" placeholder="of typ een tijd" style="margin-top:8px" oninput="bijwerkActief()" />
+      <select id="uur-select" onchange="kiesUurSelect(this.value)" style="margin-top:8px">
+        <option value="">— of kies een ander uur —</option>
+        <option value="8">08:30</option>
+        <option value="9">09:30</option>
+        <option value="10">10:30</option>
+        <option value="11">11:30</option>
+        <option value="12">12:30</option>
+        <option value="13">13:30</option>
+        <option value="14">14:30</option>
+        <option value="15">15:30</option>
+        <option value="16">16:30</option>
+        <option value="17">17:30</option>
+        <option value="18">18:30</option>
+        <option value="19">19:30</option>
+        <option value="20">20:30</option>
+        <option value="21">21:30</option>
+      </select>
     </div>
   </div>
 
@@ -529,18 +546,18 @@
   /* ── Formulier ── */
   function kiesTijd(t) {
     gekozenTijd = t;
-    document.getElementById("tijd").value = t;
+    document.getElementById("uur-select").value = "";
     document.querySelectorAll(".tijden-snel button").forEach(b => {
       b.classList.toggle("actief", b.textContent === t);
     });
   }
 
-  function bijwerkActief() {
-    const t = document.getElementById("tijd").value;
+  function kiesUurSelect(v) {
+    if (!v) { gekozenTijd = null; return; }
+    gekozenTijd = v.padStart(2, "0") + ":30";
     document.querySelectorAll(".tijden-snel button").forEach(b => {
-      b.classList.toggle("actief", b.textContent === t);
+      b.classList.toggle("actief", b.textContent === gekozenTijd);
     });
-    gekozenTijd = t || null;
   }
 
   function voegPartnerToe() {
@@ -580,7 +597,7 @@
       return;
     }
     const datum = document.getElementById("datum").value;
-    const tijd  = document.getElementById("tijd").value;
+    const tijd  = gekozenTijd;
     if (!datum) { toonMelding("fout", "Kies een datum."); return; }
     if (!tijd)  { toonMelding("fout", "Kies een tijd.");  return; }
 
