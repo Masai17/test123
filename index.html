@@ -228,6 +228,12 @@
       background: none; border: none; color: var(--groen);
       font-size: 1rem; cursor: pointer; padding: 4px;
     }
+    .btn-verwijder {
+      background: none; border: none; color: #b0b8b4;
+      font-size: 1.1rem; cursor: pointer; padding: 4px;
+      line-height: 1; flex-shrink: 0;
+    }
+    .btn-verwijder:hover { color: var(--fout); }
 
     /* ── Tab-balk ── */
     .tab-balk {
@@ -529,6 +535,7 @@
       .map(p => p.startsWith("+") ? `${p.slice(1)} (introducé)` : p)
       .join(" · ");
 
+    const sleutel = encodeURIComponent(r.speeltijd.trim());
     return `
       <div class="reservering-kaart">
         <div class="reservering-header">
@@ -536,7 +543,10 @@
             <div class="reservering-datum">${datumLabel}</div>
             ${tijdLabel ? `<div class="reservering-tijd">🕐 ${tijdLabel}</div>` : ""}
           </div>
-          ${badge}
+          <div style="display:flex;align-items:center;gap:6px">
+            ${badge}
+            <button class="btn-verwijder" onclick="verwijderReservering('${sleutel}')" title="Verwijderen">🗑</button>
+          </div>
         </div>
         ${partnerLijst ? `<div class="reservering-partners">👥 ${partnerLijst}</div>` : ""}
         ${extra}
@@ -692,6 +702,42 @@
       toonMelding("fout", `❌ Netwerkfout bij tokencheck: ${e.message}`);
     }
     testBtn.disabled = false; testBtn.textContent = "Opslaan";
+  }
+
+  async function verwijderReservering(sleutel) {
+    const speeltijd = decodeURIComponent(sleutel);
+    if (!confirm(`Reservering verwijderen?\n${speeltijd}`)) return;
+    const token = localStorage.getItem("padel_token");
+    if (!token) { toonMelding("fout", "Geen token — stel eerst in via ⚙️"); return; }
+
+    try {
+      // Haal huidige bestand + SHA op
+      const r = await fetch(`https://api.github.com/repos/${REPO}/contents/reserveringen.json`, {
+        headers: { "Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json" }
+      });
+      if (!r.ok) throw new Error(`GitHub ${r.status}`);
+      const meta = await r.json();
+      const huidig = JSON.parse(atob(meta.content.replace(/\n/g, "")));
+
+      // Verwijder de entry
+      const nieuw = huidig.filter(e => e.speeltijd.trim() !== speeltijd);
+      if (nieuw.length === huidig.length) throw new Error("Niet gevonden");
+
+      // Commit terug
+      const put = await fetch(`https://api.github.com/repos/${REPO}/contents/reserveringen.json`, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `Verwijder reservering: ${speeltijd}`,
+          content: btoa(JSON.stringify(nieuw, null, 2) + "\n"),
+          sha: meta.sha
+        })
+      });
+      if (!put.ok) throw new Error(`Commit mislukt (${put.status})`);
+      laadOverzicht();
+    } catch (e) {
+      alert("Fout bij verwijderen: " + e.message);
+    }
   }
 
   if (!localStorage.getItem("padel_token")) setTimeout(toggleInstellingen, 400);
