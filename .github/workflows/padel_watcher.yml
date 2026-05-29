@@ -110,7 +110,7 @@ jobs:
  
       
       - name: Markeer als gedaan
-        if: always() && steps.check.outputs.moet_reserveren == 'ja'
+        if: steps.check.outputs.moet_reserveren == 'ja'
         run: |
           python3 << 'PYEOF'
           import json, os
@@ -127,6 +127,7 @@ jobs:
           PYEOF
           git config user.name "github-actions"
           git config user.email "actions@github.com"
+          git pull --rebase
           git add reserveringen.json
           git commit -m "Reservering uitgevoerd: ${{ steps.check.outputs.speel_datum_tijd }}"
           git push
