@@ -53,8 +53,8 @@ jobs:
           print(f"Reservering opent: {opent.strftime('%d-%m-%Y om %H:%M')} NL")
           print(f"Nu:                {nu.strftime('%d-%m-%Y om %H:%M')} NL")
  
-          zes_uur = 6 * 3600
- 
+          zes_uur = 5 * 3600
+
           if seconden_tot_opening <= 0:
               # Reservering staat al open - direct reserveren
               print(f"\nReservering staat al open! Direct reserveren...")
@@ -62,7 +62,7 @@ jobs:
                   f.write("actie=reserveer_nu\n")
  
           elif seconden_tot_opening <= zes_uur:
-              # Opening binnen 6 uur - wacht tot exact openingsmoment
+              # Opening binnen 5 uur - wacht tot exact openingsmoment
               minuten = int(seconden_tot_opening / 60)
               print(f"\nOpening over {minuten} minuten - wachten tot {opent.strftime('%H:%M:%S')}...")
               time.sleep(seconden_tot_opening)

@@ -59,11 +59,11 @@ jobs:
               opent        = speeltijd - timedelta(hours=36)
               seconden_tot = (opent - datetime.now(tz=NL)).total_seconds()
  
-              if seconden_tot > 6 * 3600:
+              if seconden_tot > 5 * 3600:
                   print(f"  - {tekst}: nog {int(seconden_tot/3600)} uur (opent {opent.strftime('%d-%m %H:%M')})")
- 
+
               elif seconden_tot > 0:
-                  # Binnen 6 uur: wacht tot exact openingsmoment
+                  # Binnen 5 uur: wacht tot exact openingsmoment
                   print(f"  - {tekst}: opent over {int(seconden_tot/60)} min - wacht tot {opent.strftime('%H:%M:%S')}...")
                   time.sleep(seconden_tot)
                   print(f"  Tijd bereikt! Nu reserveren!")
