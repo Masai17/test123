@@ -93,16 +93,17 @@ jobs:
                   with open(bestand, "w") as f:
                       json.dump(reserveringen, f, indent=2)
                   print(f"Opgeslagen. Watcher reserveert automatisch op {opent.strftime('%d-%m-%Y om %H:%M')}.")
+                  with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                      f.write("actie=opgeslagen\n")
               else:
-                  print(f"Stond al ingepland.")
- 
+                  print(f"Stond al ingepland — geen actie nodig.")
+                  with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                      f.write("actie=geen\n")
+
               print(f"\nAlle geplande reserveringen:")
               for i, r in enumerate(reserveringen, 1):
                   status = "GEDAAN" if r["gedaan"] else "wachtend"
                   print(f"  {i}. {r['speeltijd']} [{status}]")
- 
-              with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-                  f.write("actie=opgeslagen\n")
           PYEOF
  
       - name: Commit opgeslagen reservering
@@ -112,8 +113,9 @@ jobs:
           git config user.email "actions@github.com"
           git add reserveringen.json
           git pull --rebase --autostash
-          git commit -m "Reservering gepland: ${{ github.event.inputs.speel_datum_tijd }}"
-          git push
+          git diff --cached --quiet || git commit -m "Reservering gepland: ${{ github.event.inputs.speel_datum_tijd }}"
+          git diff --cached --quiet || true
+          git push || true
  
       - name: Python + Playwright installeren
         if: steps.bereken.outputs.actie == 'reserveer_nu'
