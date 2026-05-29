@@ -320,8 +320,8 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                 break
  
         if not gekozen_baan:
-            print("  GEEN BAAN BESCHIKBAAR!")
- 
+            raise RuntimeError("GEEN BAAN BESCHIKBAAR - reservering afgebroken")
+
         await klik_volgende(page)
         print("  URL na baan: " + page.url)
  
@@ -356,14 +356,21 @@ async def reserveer(speeltijd, baan_volgorde, partners):
         url_na = page.url
         print("  URL na bevestiging: " + url_na)
         pagina = (await page.content()).lower()
+        # Homepage of reserveringspagina zelf = mislukt
+        basis_url = WEBSITE.rstrip("/")
+        is_homepage = url_na.rstrip("/") == basis_url
+        is_nog_op_confirm = "reservationsconfirm" in url_na.lower()
         succes_woorden = ["bevestigd", "gereserveerd", "gelukt", "succesvol", "bedankt",
                           "confirmed", "reservation confirmed", "your reservation"]
-        if any(w in pagina for w in succes_woorden) or "reservationsconfirm" not in url_na.lower():
-            baan_naam = "Baan " + (gekozen_baan or "?")
-            eind      = speeltijd + timedelta(hours=1)
-            print("KLAAR! " + baan_naam + " op " + speeltijd.strftime('%d-%m-%Y') + " om " + tijd_str + "-" + eind.strftime('%H:%M'))
-        else:
-            raise RuntimeError("RESERVERING NIET BEVESTIGD: pagina toont geen bevestiging (url=" + url_na + ")")
+        heeft_succes_tekst = any(w in pagina for w in succes_woorden)
+
+        if is_homepage or is_nog_op_confirm:
+            if not heeft_succes_tekst:
+                raise RuntimeError("RESERVERING NIET BEVESTIGD: teruggestuurd naar " + url_na)
+
+        baan_naam = "Baan " + gekozen_baan
+        eind      = speeltijd + timedelta(hours=1)
+        print("KLAAR! " + baan_naam + " op " + speeltijd.strftime('%d-%m-%Y') + " om " + tijd_str + "-" + eind.strftime('%H:%M'))
  
  
 async def main():
