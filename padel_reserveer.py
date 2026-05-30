@@ -213,6 +213,9 @@ async def reserveer(speeltijd, baan_volgorde, partners):
             await accepteer_cookie_banner()
             print("  Op: " + page.url)
 
+            # Debug-screenshot partners-pagina
+            await page.screenshot(path="/tmp/partners_debug.png")
+
             # Stap 3: Partners
             print("Partners: " + str(partners))
             for partner in partners:
@@ -224,51 +227,58 @@ async def reserveer(speeltijd, baan_volgorde, partners):
 
                 toegevoegd = False
 
-                # Strategie A: klik + knop naast naam in "Recent mee gespeeld"
+                # Strategie A: JS DOM-walker — exact naam, daarna dichtstbijzijnde button
                 try:
-                    alle_els = page.locator("*").filter(has_text=partner)
-                    for i in range(min(await alle_els.count(), 20)):
-                        el = alle_els.nth(i)
-                        tekst = (await el.inner_text()).strip()
-                        if partner.lower() in tekst.lower() and len(tekst) < len(partner) + 30:
-                            box = await el.bounding_box()
-                            if not box:
-                                continue
-                            plus_btn = page.locator("button").filter(
-                                has=page.locator(f"text={partner}")
-                            ).first
-                            if await plus_btn.count() == 0:
-                                # zoek button rechts van het tekstelement
-                                plus_btn = page.locator(
-                                    f"*:has-text('{partner}') ~ button, *:has-text('{partner}') + button"
-                                ).first
-                            if await plus_btn.count() > 0:
-                                await plus_btn.click(timeout=3000)
-                                await asyncio.sleep(0.5)
-                                print("  + " + partner + " (recent knop)")
-                                toegevoegd = True
-                                break
+                    resultaat = await page.evaluate("""
+                        (naam) => {
+                            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                            let node;
+                            while (node = walker.nextNode()) {
+                                if (node.textContent.trim() === naam) {
+                                    let el = node.parentElement;
+                                    for (let i = 0; i < 6; i++) {
+                                        const btn = el.querySelector('button, a[onclick], [role="button"]');
+                                        if (btn) { btn.click(); return el.className || el.tagName; }
+                                        if (!el.parentElement) break;
+                                        el = el.parentElement;
+                                    }
+                                }
+                            }
+                            return null;
+                        }
+                    """, partner)
+                    if resultaat:
+                        await asyncio.sleep(1)
+                        print("  + " + partner + " (JS: " + str(resultaat) + ")")
+                        toegevoegd = True
                 except Exception as e:
-                    print("  Recent-strategie fout: " + str(e)[:60])
+                    print("  JS-strategie fout: " + str(e)[:60])
 
                 # Strategie B: zoekbalk
                 if not toegevoegd:
                     try:
-                        zoek = page.locator("input[placeholder*='Speler'], input[placeholder*='speler'], #searchPlayerText, input[type='search']").first
-                        if await zoek.count() == 0:
-                            zoek = page.locator('input[type="text"]').first
+                        for sel in ["input[placeholder*='Speler']", "input[placeholder*='speler']",
+                                    "#searchPlayerText", "input[type='search']", "input[type='text']"]:
+                            if await page.locator(sel).count() > 0:
+                                zoek = page.locator(sel).first
+                                break
+                        else:
+                            zoek = page.locator("input").first
                         await zoek.click()
                         await zoek.fill("")
                         await zoek.type(partner, delay=80)
                         print("  Getypt: " + partner)
-                        await asyncio.sleep(2)
-                        dropdown = page.locator(".ui-autocomplete li, [class*=autocomplete] li, [class*=result] li, [class*=suggestion] li").first
-                        await dropdown.wait_for(state="visible", timeout=4000)
+                        await asyncio.sleep(2.5)
+                        dropdown = page.locator(
+                            ".ui-autocomplete li, [class*=autocomplete] li, "
+                            "[class*=result] li, [class*=suggestion] li, [class*=dropdown] li"
+                        ).first
+                        await dropdown.wait_for(state="visible", timeout=5000)
                         await dropdown.click()
                         print("  + " + partner + " (zoekbalk)")
                         toegevoegd = True
                     except Exception as e:
-                        print("  Zoek-strategie fout: " + str(e)[:60])
+                        print("  Zoek-strategie fout: " + str(e)[:80])
 
                 if not toegevoegd:
                     print("  WAARSCHUWING: " + partner + " niet gevonden")
