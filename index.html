@@ -606,6 +606,9 @@
       toonMelding("fout", "Geen token ingesteld. Tik op ⚙️ om je GitHub token in te voeren.");
       return;
     }
+    // Voeg eventuele ingetypte maar nog niet toegevoegde partner alsnog toe
+    const openInvoer = document.getElementById("partner-invoer").value.trim();
+    if (openInvoer) voegPartnerToe();
     const datum = document.getElementById("datum").value;
     const tijd  = gekozenTijd;
     if (!datum) { toonMelding("fout", "Kies een datum."); return; }
