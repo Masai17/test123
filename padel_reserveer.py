@@ -262,7 +262,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                             const els = Array.from(document.querySelectorAll('*'));
                             for (const el of els) {
                                 const t = (el.innerText || el.textContent || '').trim();
-                                if (t === naam || t.startsWith(naam + '\\n') || t.endsWith('\\n' + naam)) {
+                                if (t.toLowerCase() === naam.toLowerCase() || t.toLowerCase().startsWith(naam.toLowerCase() + '\\n') || t.toLowerCase().endsWith('\\n' + naam.toLowerCase())) {
                                     // Zoek button in parent-keten (ook siblings)
                                     let cur = el;
                                     for (let i = 0; i < 8; i++) {
