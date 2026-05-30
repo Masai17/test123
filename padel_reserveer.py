@@ -186,6 +186,17 @@ async def reserveer(speeltijd, baan_volgorde, partners):
             # Stap 0: Inloggen
             print("Inloggen...")
             await page.goto(WEBSITE, wait_until="domcontentloaded", timeout=60000)
+
+            # Cookie-banner accepteren als die er is
+            try:
+                cookie_btn = page.locator("button:has-text('Accepteer'), button:has-text('Accept'), button:has-text('OK')")
+                if await cookie_btn.count() > 0:
+                    await cookie_btn.first.click(timeout=3000)
+                    await asyncio.sleep(0.5)
+                    print("  Cookie-banner geaccepteerd")
+            except Exception:
+                pass
+
             try:
                 await page.select_option("select", label="Bondsnummer")
             except Exception:
@@ -193,7 +204,10 @@ async def reserveer(speeltijd, baan_volgorde, partners):
             await asyncio.sleep(0.3)
             await page.locator('input[type="text"]').first.fill(GEBRUIKERSNUMMER)
             await page.fill('input[type="password"]', WACHTWOORD)
-            await page.locator('button:has-text("Inloggen")').click()
+
+            # Knop heet "Log in" of "Inloggen" afhankelijk van taalinstelling
+            login_knop = page.locator("button:has-text('Log in'), button:has-text('Inloggen')").first
+            await login_knop.click(timeout=15000)
             await page.wait_for_load_state("load", timeout=20000)
             print("  Ingelogd!")
 
