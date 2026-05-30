@@ -166,7 +166,12 @@ async def reserveer(speeltijd, baan_volgorde, partners):
         print("Browser openen...")
         browser = await p.chromium.launch(
             headless=False,
-            args=["--disable-blink-features=AutomationControlled"],
+            channel="chrome",
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+            ],
         )
 
         context = await browser.new_context(
