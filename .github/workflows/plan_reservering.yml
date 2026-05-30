@@ -11,10 +11,14 @@ on:
         required: false
         default: ""
  
+concurrency:
+  group: padel-reserveer-${{ github.event.inputs.speel_datum_tijd }}
+  cancel-in-progress: false
+
 jobs:
   plan_en_reserveer:
     runs-on: ubuntu-latest
-    timeout-minutes: 370  # max ~6 uur wachten + reserveren
+    timeout-minutes: 350  # max ~6 uur wachten + reserveren
     permissions:
       contents: write
  
@@ -147,7 +151,7 @@ jobs:
           retention-days: 3
 
       - name: Sla reservering op als gedaan
-        if: steps.bereken.outputs.actie == 'reserveer_nu'
+        if: success() && steps.bereken.outputs.actie == 'reserveer_nu'
         env:
           SPEEL_DATUM_TIJD: ${{ github.event.inputs.speel_datum_tijd }}
           PARTNERS: ${{ github.event.inputs.partners }}

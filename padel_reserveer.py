@@ -2,20 +2,20 @@ import asyncio
 import os
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
- 
+
 NL = ZoneInfo("Europe/Amsterdam")
- 
+
 GEBRUIKERSNUMMER  = os.getenv("KNLTB_GEBRUIKERSNUMMER", "")
 WACHTWOORD        = os.getenv("KNLTB_WACHTWOORD", "")
 WEBSITE           = os.getenv("KNLTB_WEBSITE", "")
 SPEEL_DATUM_TIJD  = os.getenv("SPEEL_DATUM_TIJD", "")
 PARTNERS          = os.getenv("PARTNERS", "")
 INTRODUCEE_EMAIL  = os.getenv("INTRODUCEE_EMAIL", "")
- 
- 
+
+
 def nu_nl():
     return datetime.now(tz=NL)
- 
+
 def parse_speeltijd(tekst):
     for fmt in ("%d-%m-%Y %H:%M", "%Y-%m-%d %H:%M"):
         try:
@@ -23,21 +23,25 @@ def parse_speeltijd(tekst):
         except ValueError:
             continue
     raise ValueError("Ongeldige datum: " + tekst)
- 
+
 def bepaal_baan_volgorde(t):
     if t.hour < 19:
         return ["F", "G", "I", "H"]
     else:
         return ["G", "F", "H", "I"]
- 
+
 def bepaal_dagdeel(t):
     if t.hour < 12:   return "Ochtend"
     elif t.hour < 19: return "Middag"
     else:             return "Avond"
- 
- 
-async def klik_volgende(page):
+
+
+async def klik_volgende(page, verwachte_url_deel=None):
+    """Klik de Volgende-knop en verifieer optioneel dat de URL het verwachte deel bevat."""
     from playwright.async_api import TimeoutError as PWTimeout
+    url_voor = page.url
+    gelukt = False
+
     try:
         btn = page.get_by_role("button", name="Volgende")
         if await btn.count() > 0:
@@ -45,32 +49,48 @@ async def klik_volgende(page):
             await page.wait_for_load_state("load", timeout=15000)
             await asyncio.sleep(0.5)
             print("  Volgende: OK")
-            return
+            gelukt = True
     except PWTimeout:
         pass
-    try:
-        btn = page.locator("button").filter(has_text="Volgende").last
-        await btn.click(timeout=8000)
+
+    if not gelukt:
+        try:
+            btn = page.locator("button").filter(has_text="Volgende").last
+            await btn.click(timeout=8000)
+            await page.wait_for_load_state("load", timeout=15000)
+            await asyncio.sleep(0.5)
+            print("  Volgende: OK (filter)")
+            gelukt = True
+        except PWTimeout:
+            pass
+
+    if not gelukt:
+        try:
+            await page.evaluate(
+                "() => { const knoppen = [...document.querySelectorAll('button')]; for (const k of knoppen.reverse()) { if ((k.textContent||'').includes('Volgende')) { k.click(); return; } } }"
+            )
+        except Exception as e:
+            # "Execution context was destroyed" = klik triggerde navigatie, dat is prima
+            if "context was destroyed" not in str(e).lower() and "execution context" not in str(e).lower():
+                raise
+            print("  Volgende: navigatie gedetecteerd (OK)")
         await page.wait_for_load_state("load", timeout=15000)
         await asyncio.sleep(0.5)
-        print("  Volgende: OK (filter)")
-        return
-    except PWTimeout:
-        pass
-    try:
-        await page.evaluate(
-            "() => { const knoppen = [...document.querySelectorAll('button')]; for (const k of knoppen.reverse()) { if ((k.textContent||'').includes('Volgende')) { k.click(); return; } } }"
+        print("  Volgende: OK (JS)")
+        gelukt = True
+
+    # URL-verificatie: check of pagina vooruitgegaan is
+    url_na = page.url
+    if url_na == url_voor:
+        raise RuntimeError("Pagina niet vooruitgegaan na klikken Volgende (URL: " + url_na + ")")
+
+    # Optioneel: check of URL het verwachte deel bevat
+    if verwachte_url_deel and verwachte_url_deel not in url_na:
+        raise RuntimeError(
+            "Onverwachte URL na Volgende: verwacht '" + verwachte_url_deel + "' maar kreeg: " + url_na
         )
-    except Exception as e:
-        # "Execution context was destroyed" = klik triggerde navigatie, dat is prima
-        if "context was destroyed" not in str(e).lower() and "execution context" not in str(e).lower():
-            raise
-        print("  Volgende: navigatie gedetecteerd (OK)")
-    await page.wait_for_load_state("load", timeout=15000)
-    await asyncio.sleep(0.5)
-    print("  Volgende: OK (JS)")
- 
- 
+
+
 async def probeer_tijdcel(page, baan, speeltijd):
     dag_nummer = {"F": "6", "G": "7", "H": "8", "I": "9"}[baan]
     uur        = str(speeltijd.hour)
@@ -88,8 +108,8 @@ async def probeer_tijdcel(page, baan, speeltijd):
     except Exception as e:
         print("  Baan " + baan + " niet beschikbaar: " + str(e)[:60])
         return False
- 
- 
+
+
 async def voeg_introducee_toe(page, naam, email):
     """Klik op 'Introducé toevoegen', vul naam + email in #guestModal, klik Toevoegen."""
     print("  Introducé toevoegen: " + naam)
@@ -97,12 +117,12 @@ async def voeg_introducee_toe(page, naam, email):
         # ── Stap 1: open de modal via JS (zelfde als onclick in de HTML) ──────
         await page.evaluate("() => $('#guestModal').modal('show')")
         print("  Modal geopend")
- 
+
         # ── Stap 2: wacht tot #guestModal zichtbaar is ────────────────────────
         modal = page.locator("#guestModal")
         await modal.wait_for(state="visible", timeout=6000)
         await asyncio.sleep(0.5)
- 
+
         # ── Stap 3: naam invullen — eerste input in de modal ──────────────────
         naam_input = modal.locator("input").first
         await naam_input.wait_for(state="visible", timeout=4000)
@@ -110,19 +130,19 @@ async def voeg_introducee_toe(page, naam, email):
         await naam_input.fill(naam)
         print("  Naam ingevuld: " + naam)
         await asyncio.sleep(0.2)
- 
+
         # ── Stap 4: email invullen — tweede input in de modal ─────────────────
         email_input = modal.locator("input").nth(1)
         await email_input.click()
         await email_input.fill(email)
         print("  Email ingevuld: " + email)
         await asyncio.sleep(0.2)
- 
+
         # ── Stap 5: klik "Toevoegen" knop in de modal ─────────────────────────
         toevoegen_btn = modal.locator("button").filter(has_text="Toevoegen")
         await toevoegen_btn.click(timeout=5000)
         await asyncio.sleep(1.5)
- 
+
         # Wacht tot modal dicht is
         await modal.wait_for(state="hidden", timeout=5000)
         print("  + Introducé toegevoegd: " + naam)
@@ -130,18 +150,18 @@ async def voeg_introducee_toe(page, naam, email):
     except Exception as e:
         print("  FOUT bij introducé toevoegen: " + str(e)[:100])
         return False
- 
- 
+
+
 async def reserveer(speeltijd, baan_volgorde, partners):
     from playwright.async_api import async_playwright, TimeoutError as PWTimeout
- 
+
     tijd_str  = speeltijd.strftime("%H:%M")
     datum_dag = str(speeltijd.day)
     dagdeel   = bepaal_dagdeel(speeltijd)
- 
+
     dag_afkortingen = ["", "ma", "di", "wo", "do", "vr", "za", "zo"]
     zoek_tekst      = dag_afkortingen[speeltijd.isoweekday()] + " " + datum_dag
- 
+
     async with async_playwright() as p:
         print("Browser openen...")
         browser = await p.chromium.launch(
@@ -161,264 +181,275 @@ async def reserveer(speeltijd, baan_volgorde, partners):
             print("  Stealth mode actief")
         except ImportError:
             print("  playwright-stealth niet beschikbaar, verder zonder")
- 
-        # Stap 0: Inloggen
-        print("Inloggen...")
-        await page.goto(WEBSITE, wait_until="domcontentloaded", timeout=60000)
-        try:
-            await page.select_option("select", label="Bondsnummer")
-        except Exception:
-            pass
-        await asyncio.sleep(0.3)
-        await page.locator('input[type="text"]').first.fill(GEBRUIKERSNUMMER)
-        await page.fill('input[type="password"]', WACHTWOORD)
-        await page.locator('button:has-text("Inloggen")').click()
-        await page.wait_for_load_state("load", timeout=20000)
-        print("  Ingelogd!")
- 
-        # Stap 1: Baan reserveringen tab
-        print("Naar Baan reserveringen...")
-        await page.locator('text=Baan reserveringen').click()
-        await page.wait_for_load_state("load", timeout=10000)
 
-        # Stap 2: Baan afhangen
-        print("Baan afhangen...")
-        await page.locator('text=Baan afhangen').click()
-        await page.wait_for_load_state("load", timeout=10000)
- 
-        # Stap 3: Partners
-        print("Partners: " + str(partners))
-        for partner in partners:
-            # Introducé: naam die begint met "+" bijv. "+Jill"
-            if partner.startswith("+"):
-                introducee_naam = partner[1:].strip()
-                await voeg_introducee_toe(page, introducee_naam, INTRODUCEE_EMAIL)
-                await asyncio.sleep(0.5)
-                continue
- 
-            toegevoegd = False
+        try:
+            # Stap 0: Inloggen
+            print("Inloggen...")
+            await page.goto(WEBSITE, wait_until="domcontentloaded", timeout=60000)
             try:
-                zoek = page.locator('#searchPlayerText')
-                if await zoek.count() == 0:
-                    zoek = page.locator('input[type="text"]').first
-                await zoek.click()
-                await zoek.type(partner, delay=80)
-                print("  Getypt: " + partner)
-                await asyncio.sleep(2)
- 
+                await page.select_option("select", label="Bondsnummer")
+            except Exception:
+                pass
+            await asyncio.sleep(0.3)
+            await page.locator('input[type="text"]').first.fill(GEBRUIKERSNUMMER)
+            await page.fill('input[type="password"]', WACHTWOORD)
+            await page.locator('button:has-text("Inloggen")').click()
+            await page.wait_for_load_state("load", timeout=20000)
+            print("  Ingelogd!")
+
+            # Stap 1: Baan reserveringen tab
+            print("Naar Baan reserveringen...")
+            await page.locator('text=Baan reserveringen').click()
+            await page.wait_for_load_state("load", timeout=10000)
+
+            # Stap 2: Baan afhangen
+            print("Baan afhangen...")
+            await page.locator('text=Baan afhangen').click()
+            await page.wait_for_load_state("load", timeout=10000)
+
+            # Stap 3: Partners
+            print("Partners: " + str(partners))
+            for partner in partners:
+                # Introducé: naam die begint met "+" bijv. "+Jill"
+                if partner.startswith("+"):
+                    introducee_naam = partner[1:].strip()
+                    await voeg_introducee_toe(page, introducee_naam, INTRODUCEE_EMAIL)
+                    await asyncio.sleep(0.5)
+                    continue
+
+                toegevoegd = False
                 try:
-                    dropdown = page.locator(".ui-autocomplete li, [class*=autocomplete] li, [class*=result] li").first
-                    await dropdown.wait_for(state="visible", timeout=4000)
-                    await dropdown.click()
-                    print("  + " + partner + " (dropdown)")
-                    toegevoegd = True
-                except Exception:
-                    pass
- 
-                if not toegevoegd:
+                    zoek = page.locator('#searchPlayerText')
+                    if await zoek.count() == 0:
+                        zoek = page.locator('input[type="text"]').first
+                    await zoek.click()
+                    await zoek.type(partner, delay=80)
+                    print("  Getypt: " + partner)
+                    await asyncio.sleep(2)
+
                     try:
-                        item    = page.get_by_text(partner, exact=False).first
-                        box     = await item.bounding_box()
-                        zoek_box = await page.locator("#searchPlayerText").bounding_box()
-                        if box and zoek_box and box["y"] > zoek_box["y"] + zoek_box["height"]:
-                            await item.click(timeout=3000)
-                            print("  + " + partner + " (positie)")
-                            toegevoegd = True
-                    except Exception as e:
-                        print("  Fout: " + str(e))
-            except Exception as e:
-                print("  Fout: " + str(e))
- 
-            if not toegevoegd:
-                print("  WAARSCHUWING: " + partner + " niet gevonden")
-            await asyncio.sleep(0.5)
- 
-        url_voor_dag = page.url
-        await klik_volgende(page)
-        if page.url == url_voor_dag:
-            raise RuntimeError("Pagina niet vooruitgegaan na partners-stap (URL: " + page.url + ")")
-        print("  URL na partners: " + page.url)
+                        dropdown = page.locator(".ui-autocomplete li, [class*=autocomplete] li, [class*=result] li").first
+                        await dropdown.wait_for(state="visible", timeout=4000)
+                        await dropdown.click()
+                        print("  + " + partner + " (dropdown)")
+                        toegevoegd = True
+                    except Exception:
+                        pass
 
-        # Stap 4: Dag + dagdeel
-        print("Dag: " + zoek_tekst + " dagdeel: " + dagdeel)
-        await asyncio.sleep(1)
+                    if not toegevoegd:
+                        try:
+                            item    = page.get_by_text(partner, exact=False).first
+                            box     = await item.bounding_box()
+                            zoek_box = await page.locator("#searchPlayerText").bounding_box()
+                            if box and zoek_box and box["y"] > zoek_box["y"] + zoek_box["height"]:
+                                await item.click(timeout=3000)
+                                print("  + " + partner + " (positie)")
+                                toegevoegd = True
+                        except Exception as e:
+                            print("  Fout: " + str(e))
+                except Exception as e:
+                    print("  Fout: " + str(e))
 
-        for _ in range(8):
-            try:
-                zichtbaar = await page.evaluate(
-                    "(dag) => { const els = document.querySelectorAll('td, th, div, span'); for (const el of els) { if ((el.innerText||'').trim().includes(dag)) return true; } return false; }",
-                    datum_dag
-                )
-            except Exception as e:
-                if "context was destroyed" in str(e).lower() or "execution context" in str(e).lower():
-                    await asyncio.sleep(1)
-                    continue
-                raise
-            if zichtbaar:
-                break
-            try:
-                await page.locator('button:has-text(">")').click(timeout=2000)
+                if not toegevoegd:
+                    print("  WAARSCHUWING: " + partner + " niet gevonden")
                 await asyncio.sleep(0.5)
-            except PWTimeout:
-                break
 
-        dag_geklikt = False
-        dag_el      = None
-        dag_x       = None
-        try:
-            alle_els = page.locator("td, th, div, span")
-            for i in range(await alle_els.count()):
-                el = alle_els.nth(i)
+            # Volgende na partners — verwacht /me/ReservationsDay
+            await klik_volgende(page, verwachte_url_deel="/me/ReservationsDay")
+            print("  URL na partners: " + page.url)
+
+            # Stap 4: Dag + dagdeel
+            print("Dag: " + zoek_tekst + " dagdeel: " + dagdeel)
+            await asyncio.sleep(1)
+
+            for _ in range(8):
                 try:
-                    tekst = (await el.inner_text()).strip()
-                    if zoek_tekst.lower() in tekst.lower():
-                        box = await el.bounding_box()
-                        if box and box["width"] > 0:
-                            dag_x  = box["x"] + box["width"] / 2
-                            dag_el = el
-                            print("  Kolom gevonden op x=" + str(round(dag_x)))
-                            break
-                except Exception:
-                    continue
+                    zichtbaar = await page.evaluate(
+                        "(dag) => { const els = document.querySelectorAll('td, th, div, span'); for (const el of els) { if ((el.innerText||'').trim().includes(dag)) return true; } return false; }",
+                        datum_dag
+                    )
+                except Exception as e:
+                    if "context was destroyed" in str(e).lower() or "execution context" in str(e).lower():
+                        await asyncio.sleep(1)
+                        continue
+                    raise
+                if zichtbaar:
+                    break
+                try:
+                    await page.locator('button:has-text(">")').click(timeout=2000)
+                    await asyncio.sleep(0.5)
+                except PWTimeout:
+                    break
 
-            if dag_x is not None:
-                # Probeer het exacte dagdeel te klikken
-                dagdeel_els   = page.locator("td, div")
-                beste_el      = None
-                beste_afstand = 9999
-                for i in range(await dagdeel_els.count()):
-                    el = dagdeel_els.nth(i)
+            dag_geklikt = False
+            dag_el      = None
+            dag_x       = None
+            beste_el    = None
+            try:
+                alle_els = page.locator("td, th, div, span")
+                for i in range(await alle_els.count()):
+                    el = alle_els.nth(i)
                     try:
                         tekst = (await el.inner_text()).strip()
-                        if tekst.lower() != dagdeel.lower():
-                            continue
-                        box = await el.bounding_box()
-                        if not box or box["width"] <= 0:
-                            continue
-                        afstand = abs(box["x"] + box["width"] / 2 - dag_x)
-                        if afstand < beste_afstand:
-                            beste_afstand = afstand
-                            beste_el      = el
+                        if zoek_tekst.lower() in tekst.lower():
+                            box = await el.bounding_box()
+                            if box and box["width"] > 0:
+                                dag_x  = box["x"] + box["width"] / 2
+                                dag_el = el
+                                print("  Kolom gevonden op x=" + str(round(dag_x)))
+                                break
                     except Exception:
                         continue
 
-                if beste_el is not None:
-                    await beste_el.scroll_into_view_if_needed()
-                    await beste_el.click()
-                    print("  Dagdeel geklikt: " + dagdeel)
-                    dag_geklikt = True
-                else:
-                    # Dagdeel niet gevonden — klik de dag-kolom zelf als fallback
-                    print("  Dagdeel '" + dagdeel + "' niet gevonden, klik dag-kolom als fallback")
-                    await dag_el.scroll_into_view_if_needed()
-                    await dag_el.click()
-                    await asyncio.sleep(0.5)
-                    dag_geklikt = True
-        except Exception as e:
-            print("  Dag fout: " + str(e))
+                if dag_x is not None:
+                    # Strategie 1: probeer het exacte dagdeel te klikken via DOM
+                    dagdeel_els   = page.locator("td, div")
+                    beste_afstand = 9999
+                    for i in range(await dagdeel_els.count()):
+                        el = dagdeel_els.nth(i)
+                        try:
+                            tekst = (await el.inner_text()).strip()
+                            if tekst.lower() != dagdeel.lower():
+                                continue
+                            box = await el.bounding_box()
+                            if not box or box["width"] <= 0:
+                                continue
+                            afstand = abs(box["x"] + box["width"] / 2 - dag_x)
+                            if afstand < beste_afstand:
+                                beste_afstand = afstand
+                                beste_el      = el
+                        except Exception:
+                            continue
 
-        if not dag_geklikt:
-            await page.screenshot(path="/tmp/padel_screenshot.png")
-            raise RuntimeError("DAG NIET GEVONDEN IN KALENDER: " + zoek_tekst + " / " + dagdeel)
+                    if beste_el is not None:
+                        await beste_el.scroll_into_view_if_needed()
+                        await beste_el.click()
+                        await asyncio.sleep(0.8)
+                        print("  Dagdeel geklikt: " + dagdeel)
+                        dag_geklikt = True
+                    else:
+                        # Strategie 2: dagdeel niet gevonden via DOM — klik dag-kolom zelf
+                        print("  Dagdeel '" + dagdeel + "' niet gevonden via DOM, klik dag-kolom als fallback")
+                        await dag_el.scroll_into_view_if_needed()
+                        await dag_el.click()
+                        await asyncio.sleep(0.8)
+                        dag_geklikt = True
 
-        await asyncio.sleep(0.5)
-        url_voor_baan = page.url
-        await klik_volgende(page)
-        if page.url == url_voor_baan:
-            raise RuntimeError("Pagina niet vooruitgegaan na dag-stap (URL: " + page.url + ")")
-        print("  URL na dag: " + page.url)
- 
-        # Stap 5: Tijdcel - probeer banen in volgorde
-        print("Tijdslot " + tijd_str + " voorkeur: " + str(baan_volgorde))
-        gekozen_baan = None
-        for baan in baan_volgorde:
-            if await probeer_tijdcel(page, baan, speeltijd):
-                gekozen_baan = baan
-                break
- 
-        if not gekozen_baan:
-            await page.screenshot(path="/tmp/padel_screenshot.png")
-            raise RuntimeError("GEEN BAAN BESCHIKBAAR - reservering afgebroken")
+                    # Strategie 3: als pagina nog niet reageert, probeer JS-klik op het element
+                    if dag_geklikt:
+                        url_check = page.url
+                        await asyncio.sleep(0.5)
+                        if page.url == url_check:
+                            print("  Pagina reageerde niet op klik — JS-fallback voor dagdeel")
+                            try:
+                                doel_el = beste_el if beste_el is not None else dag_el
+                                await page.evaluate("(el) => el.click()", await doel_el.element_handle())
+                                await asyncio.sleep(0.8)
+                                print("  JS-klik uitgevoerd")
+                            except Exception as js_e:
+                                print("  JS-klik fout (kan OK zijn): " + str(js_e)[:80])
 
-        url_voor_confirm = page.url
-        await klik_volgende(page)
-        if page.url == url_voor_confirm:
-            raise RuntimeError("Pagina niet vooruitgegaan na baan-stap (URL: " + page.url + ")")
-        print("  URL na baan: " + page.url)
- 
-        # Stap 6: Bevestigen
-        print("Bevestigen...")
-        await asyncio.sleep(1)
-        bevestigd = False
-        for sel in ["#confirmReservationButton", "a.btn-primary", "a[data-url*=SaveReservation]"]:
-            try:
-                el = page.locator(sel).first
-                if await el.is_visible(timeout=3000):
-                    await el.click()
-                    await page.wait_for_load_state("load", timeout=15000)
-                    print("  Bevestigen OK: " + sel)
-                    bevestigd = True
+            except Exception as e:
+                print("  Dag fout: " + str(e))
+
+            if not dag_geklikt:
+                raise RuntimeError("DAG NIET GEVONDEN IN KALENDER: " + zoek_tekst + " / " + dagdeel)
+
+            await asyncio.sleep(0.5)
+
+            # Volgende na dag — verwacht /me/ReservationsCourt
+            await klik_volgende(page, verwachte_url_deel="/me/ReservationsCourt")
+            print("  URL na dag: " + page.url)
+
+            # Stap 5: Tijdcel - probeer banen in volgorde
+            print("Tijdslot " + tijd_str + " voorkeur: " + str(baan_volgorde))
+            gekozen_baan = None
+            for baan in baan_volgorde:
+                if await probeer_tijdcel(page, baan, speeltijd):
+                    gekozen_baan = baan
                     break
-            except Exception:
-                continue
-        if not bevestigd:
+
+            if not gekozen_baan:
+                raise RuntimeError("GEEN BAAN BESCHIKBAAR - reservering afgebroken")
+
+            # Volgende na baan — verwacht /me/ReservationsConfirm
+            await klik_volgende(page, verwachte_url_deel="/me/ReservationsConfirm")
+            print("  URL na baan: " + page.url)
+
+            # Stap 6: Bevestigen
+            print("Bevestigen...")
+            await asyncio.sleep(1)
+            bevestigd = False
+            for sel in ["#confirmReservationButton", "a.btn-primary", "a[data-url*=SaveReservation]"]:
+                try:
+                    el = page.locator(sel).first
+                    if await el.is_visible(timeout=3000):
+                        await el.click()
+                        await page.wait_for_load_state("load", timeout=15000)
+                        print("  Bevestigen OK: " + sel)
+                        bevestigd = True
+                        break
+                except Exception:
+                    continue
+            if not bevestigd:
+                try:
+                    await page.get_by_role("link", name="Bevestigen").click(timeout=5000)
+                    await page.wait_for_load_state("load", timeout=15000)
+                    print("  Bevestigen OK (link)")
+                    bevestigd = True
+                except Exception:
+                    pass
+            if not bevestigd:
+                raise RuntimeError("BEVESTIGEN MISLUKT: knop niet gevonden")
+
+            # Stap 7: Verifieer bevestiging — URL moet /me/Reservations zijn, NIET /me/ReservationsConfirm
+            await asyncio.sleep(1)
+            url_na = page.url
+            print("  URL na bevestiging: " + url_na)
+
+            is_succes = "/me/Reservations" in url_na and "Confirm" not in url_na
+            if not is_succes:
+                raise RuntimeError(
+                    "RESERVERING NIET BEVESTIGD: verwacht /me/Reservations maar kreeg: " + url_na
+                )
+
+            baan_naam = "Baan " + gekozen_baan
+            eind      = speeltijd + timedelta(hours=1)
+            print("KLAAR! " + baan_naam + " op " + speeltijd.strftime('%d-%m-%Y') + " om " + tijd_str + "-" + eind.strftime('%H:%M'))
+
+        except Exception as exc:
+            # Bij elke fout: screenshot maken voor diagnose
             try:
-                await page.get_by_role("link", name="Bevestigen").click(timeout=5000)
-                await page.wait_for_load_state("load", timeout=15000)
-                print("  Bevestigen OK (link)")
-                bevestigd = True
-            except Exception:
-                pass
-        if not bevestigd:
-            await page.screenshot(path="/tmp/padel_screenshot.png")
-            raise RuntimeError("BEVESTIGEN MISLUKT: knop niet gevonden")
-
-        # Stap 7: Verifieer bevestiging op de pagina
-        await asyncio.sleep(1)
-        url_na = page.url
-        print("  URL na bevestiging: " + url_na)
-        pagina = (await page.content()).lower()
-        # Homepage of reserveringspagina zelf = mislukt
-        basis_url = WEBSITE.rstrip("/")
-        is_homepage = url_na.rstrip("/") == basis_url
-        is_nog_op_confirm = "reservationsconfirm" in url_na.lower()
-        succes_woorden = ["bevestigd", "gereserveerd", "gelukt", "succesvol", "bedankt",
-                          "confirmed", "reservation confirmed", "your reservation"]
-        heeft_succes_tekst = any(w in pagina for w in succes_woorden)
-
-        if is_homepage or is_nog_op_confirm:
-            if not heeft_succes_tekst:
                 await page.screenshot(path="/tmp/padel_screenshot.png")
-                raise RuntimeError("RESERVERING NIET BEVESTIGD: teruggestuurd naar " + url_na)
+                print("  Screenshot opgeslagen: /tmp/padel_screenshot.png")
+            except Exception as screenshot_exc:
+                print("  Screenshot mislukt: " + str(screenshot_exc)[:80])
+            raise
 
-        baan_naam = "Baan " + gekozen_baan
-        eind      = speeltijd + timedelta(hours=1)
-        print("KLAAR! " + baan_naam + " op " + speeltijd.strftime('%d-%m-%Y') + " om " + tijd_str + "-" + eind.strftime('%H:%M'))
- 
- 
+
 async def main():
     print("Padel Auto-Reservering")
     print("======================")
- 
+
     if not GEBRUIKERSNUMMER or not WACHTWOORD:
         raise ValueError("Stel KNLTB_GEBRUIKERSNUMMER en KNLTB_WACHTWOORD in als GitHub Secrets!")
     if not WEBSITE:
         raise ValueError("Stel KNLTB_WEBSITE in als GitHub Secret!")
     if not SPEEL_DATUM_TIJD:
         raise ValueError("Stel SPEEL_DATUM_TIJD in.")
- 
+
     speeltijd     = parse_speeltijd(SPEEL_DATUM_TIJD)
     baan_volgorde = bepaal_baan_volgorde(speeltijd)
     partners      = [p.strip() for p in PARTNERS.split(",") if p.strip()] if PARTNERS else []
- 
+
     print("Speeltijd:     " + speeltijd.strftime('%d-%m-%Y om %H:%M') + " (NL tijd)")
     print("Baan volgorde: " + str(baan_volgorde))
     print("Partners:      " + (", ".join(partners) if partners else "(geen)"))
     print("Nu:            " + nu_nl().strftime('%d-%m-%Y om %H:%M:%S') + " (NL tijd)")
     print()
- 
+
     await reserveer(speeltijd, baan_volgorde, partners)
- 
- 
+
+
 if __name__ == "__main__":
     asyncio.run(main())
