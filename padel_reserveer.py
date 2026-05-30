@@ -352,75 +352,36 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                     break
 
             dag_geklikt = False
-            dag_el      = None
-            dag_x       = None
-            beste_el    = None
+
+            # Strategie 1: JS via data-date + dagdeel-tekst (meest betrouwbaar)
             try:
-                alle_els = page.locator("td, th, div, span")
-                for i in range(await alle_els.count()):
-                    el = alle_els.nth(i)
-                    try:
-                        tekst = (await el.inner_text()).strip()
-                        if zoek_tekst.lower() in tekst.lower():
-                            box = await el.bounding_box()
-                            if box and box["width"] > 0:
-                                dag_x  = box["x"] + box["width"] / 2
-                                dag_el = el
-                                print("  Kolom gevonden op x=" + str(round(dag_x)))
-                                break
-                    except Exception:
-                        continue
-
-                if dag_x is not None:
-                    # Strategie 1: probeer het exacte dagdeel te klikken via DOM
-                    dagdeel_els   = page.locator("td, div")
-                    beste_afstand = 9999
-                    for i in range(await dagdeel_els.count()):
-                        el = dagdeel_els.nth(i)
-                        try:
-                            tekst = (await el.inner_text()).strip()
-                            if tekst.lower() != dagdeel.lower():
-                                continue
-                            box = await el.bounding_box()
-                            if not box or box["width"] <= 0:
-                                continue
-                            afstand = abs(box["x"] + box["width"] / 2 - dag_x)
-                            if afstand < beste_afstand:
-                                beste_afstand = afstand
-                                beste_el      = el
-                        except Exception:
-                            continue
-
-                    if beste_el is not None:
-                        await beste_el.scroll_into_view_if_needed()
-                        await beste_el.click()
-                        await asyncio.sleep(0.8)
-                        print("  Dagdeel geklikt: " + dagdeel)
-                        dag_geklikt = True
-                    else:
-                        # Strategie 2: dagdeel niet gevonden via DOM — klik dag-kolom zelf
-                        print("  Dagdeel '" + dagdeel + "' niet gevonden via DOM, klik dag-kolom als fallback")
-                        await dag_el.scroll_into_view_if_needed()
-                        await dag_el.click()
-                        await asyncio.sleep(0.8)
-                        dag_geklikt = True
-
-                    # Strategie 3: als pagina nog niet reageert, probeer JS-klik op het element
-                    if dag_geklikt:
-                        url_check = page.url
-                        await asyncio.sleep(0.5)
-                        if page.url == url_check:
-                            print("  Pagina reageerde niet op klik — JS-fallback voor dagdeel")
-                            try:
-                                doel_el = beste_el if beste_el is not None else dag_el
-                                await page.evaluate("(el) => el.click()", await doel_el.element_handle())
-                                await asyncio.sleep(0.8)
-                                print("  JS-klik uitgevoerd")
-                            except Exception as js_e:
-                                print("  JS-klik fout (kan OK zijn): " + str(js_e)[:80])
-
+                datum_str = speeltijd.strftime("%Y-%m-%d")
+                resultaat = await page.evaluate("""
+                    ([datum, dagdeelTekst]) => {
+                        // Probeer eerst niet-disabled
+                        for (const sel of ['.daypart:not(.disabled)', '.daypart', '[class*=daypart]']) {
+                            const els = document.querySelectorAll(sel);
+                            for (const el of els) {
+                                const d = el.dataset.date || el.getAttribute('data-date') || '';
+                                if (!d.startsWith(datum)) continue;
+                                const t = (el.innerText || el.textContent || '').trim().toLowerCase();
+                                if (t === dagdeelTekst.toLowerCase()) {
+                                    el.click();
+                                    return sel + '|' + d + '|' + el.className;
+                                }
+                            }
+                        }
+                        return null;
+                    }
+                """, [datum_str, dagdeel])
+                if resultaat:
+                    print("  Dagdeel geklikt via data-date: " + str(resultaat))
+                    await asyncio.sleep(0.8)
+                    dag_geklikt = True
+                else:
+                    print("  data-date: geen match voor " + datum_str + "/" + dagdeel)
             except Exception as e:
-                print("  Dag fout: " + str(e))
+                print("  data-date strategie fout: " + str(e)[:80])
 
             if not dag_geklikt:
                 raise RuntimeError("DAG NIET GEVONDEN IN KALENDER: " + zoek_tekst + " / " + dagdeel)
