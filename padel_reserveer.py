@@ -203,14 +203,26 @@ async def reserveer(speeltijd, baan_volgorde, partners):
             await page.wait_for_load_state("load", timeout=20000)
             print("  Ingelogd! URL: " + page.url)
 
-            # Stap 1+2: navigeer direct naar de partners-stap
-            basis = WEBSITE.rstrip("/")
-            reserveer_url = basis + "/me/ReservationsPlayers"
+            # Stap 1+2: partners-stap bereiken (site redirect na login automatisch)
+            await asyncio.sleep(1)
+            print("  Na login URL: " + page.url)
+
             if "/me/Reservations" not in page.url:
-                print("Navigeer naar reserveringspagina...")
-                await page.goto(reserveer_url, wait_until="domcontentloaded", timeout=30000)
-                await asyncio.sleep(1)
+                print("Klik Baan reserveringen tab...")
+                for sel in ["a:has-text('Baan reserveringen')", "text=Baan reserveringen",
+                            "[href*='Reservation']"]:
+                    try:
+                        el = page.locator(sel).first
+                        if await el.count() > 0:
+                            await el.click(timeout=8000)
+                            await page.wait_for_load_state("load", timeout=10000)
+                            print("  Tab geklikt: " + sel)
+                            break
+                    except Exception:
+                        continue
+
             await accepteer_cookie_banner()
+            await asyncio.sleep(1)
             print("  Op: " + page.url)
 
             # Debug-screenshot partners-pagina
@@ -227,20 +239,32 @@ async def reserveer(speeltijd, baan_volgorde, partners):
 
                 toegevoegd = False
 
-                # Strategie A: JS DOM-walker — exact naam, daarna dichtstbijzijnde button
+                # Strategie A: JS — zoek naam in alle elementen, klik + button
                 try:
                     resultaat = await page.evaluate("""
                         (naam) => {
-                            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-                            let node;
-                            while (node = walker.nextNode()) {
-                                if (node.textContent.trim() === naam) {
-                                    let el = node.parentElement;
-                                    for (let i = 0; i < 6; i++) {
-                                        const btn = el.querySelector('button, a[onclick], [role="button"]');
-                                        if (btn) { btn.click(); return el.className || el.tagName; }
-                                        if (!el.parentElement) break;
-                                        el = el.parentElement;
+                            const els = Array.from(document.querySelectorAll('*'));
+                            for (const el of els) {
+                                const t = (el.innerText || el.textContent || '').trim();
+                                if (t === naam || t.startsWith(naam + '\\n') || t.endsWith('\\n' + naam)) {
+                                    // Zoek button in parent-keten (ook siblings)
+                                    let cur = el;
+                                    for (let i = 0; i < 8; i++) {
+                                        // Button in huidig element
+                                        const btn = cur.querySelector('button, [onclick], [role="button"]');
+                                        if (btn && btn !== el) { btn.click(); return 'child:' + cur.className; }
+                                        // Sibling button
+                                        let sib = cur.nextElementSibling;
+                                        while (sib) {
+                                            if (sib.tagName === 'BUTTON' || sib.getAttribute('role') === 'button') {
+                                                sib.click(); return 'sibling';
+                                            }
+                                            const sbtn = sib.querySelector('button, [role="button"]');
+                                            if (sbtn) { sbtn.click(); return 'sib-child'; }
+                                            sib = sib.nextElementSibling;
+                                        }
+                                        if (!cur.parentElement) break;
+                                        cur = cur.parentElement;
                                     }
                                 }
                             }
