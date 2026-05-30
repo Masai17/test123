@@ -209,14 +209,30 @@ async def reserveer(speeltijd, baan_volgorde, partners):
 
             if "/me/Reservations" not in page.url:
                 print("Klik Baan reserveringen tab...")
-                for sel in ["a:has-text('Baan reserveringen')", "text=Baan reserveringen",
-                            "[href*='Reservation']"]:
+                for sel in ["a:has-text('Baan reserveringen')", "text=Baan reserveringen"]:
                     try:
                         el = page.locator(sel).first
                         if await el.count() > 0:
                             await el.click(timeout=8000)
                             await page.wait_for_load_state("load", timeout=10000)
                             print("  Tab geklikt: " + sel)
+                            break
+                    except Exception:
+                        continue
+                await asyncio.sleep(0.5)
+
+            # Klik "Baan afhangen" als die zichtbaar is (opent de reserveringswizard)
+            if "/me/ReservationsPlayers" not in page.url:
+                await accepteer_cookie_banner()
+                print("Klik Baan afhangen...")
+                for sel in ["text=Baan afhangen", "a:has-text('Baan afhangen')",
+                            "button:has-text('Baan afhangen')"]:
+                    try:
+                        el = page.locator(sel).first
+                        if await el.count() > 0:
+                            await el.click(timeout=8000)
+                            await page.wait_for_load_state("load", timeout=10000)
+                            print("  Baan afhangen geklikt: " + sel)
                             break
                     except Exception:
                         continue
