@@ -166,12 +166,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
         print("Browser openen...")
         browser = await p.chromium.launch(
             headless=False,
-            channel="chrome",
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-            ],
+            args=["--disable-blink-features=AutomationControlled"],
         )
 
         context = await browser.new_context(
@@ -180,12 +175,6 @@ async def reserveer(speeltijd, baan_volgorde, partners):
         )
 
         page = await context.new_page()
-        try:
-            from playwright_stealth import stealth_async
-            await stealth_async(page)
-            print("  Stealth mode actief")
-        except ImportError:
-            print("  playwright-stealth niet beschikbaar, verder zonder")
 
         try:
             # Stap 0: Inloggen
