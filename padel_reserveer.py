@@ -435,16 +435,23 @@ async def reserveer(speeltijd, baan_volgorde, partners):
             if not bevestigd:
                 raise RuntimeError("BEVESTIGEN MISLUKT: knop niet gevonden")
 
-            # Stap 7: Verifieer bevestiging — URL moet /me/Reservations zijn, NIET /me/ReservationsConfirm
-            await asyncio.sleep(1)
+            # Stap 7: Verifieer bevestiging
+            await asyncio.sleep(2)
             url_na = page.url
             print("  URL na bevestiging: " + url_na)
+            pagina = (await page.content()).lower()
 
-            is_succes = "/me/Reservations" in url_na and "Confirm" not in url_na
-            if not is_succes:
-                raise RuntimeError(
-                    "RESERVERING NIET BEVESTIGD: verwacht /me/Reservations maar kreeg: " + url_na
-                )
+            if "/me/Reservations" in url_na and "Confirm" not in url_na:
+                pass  # URL veranderd naar succes-pagina
+            elif "ReservationsConfirm" in url_na:
+                # AJAX-bevestiging: URL blijft zelfde. Check op echte foutmeldingen.
+                fout_woorden = ["mislukt", "fout", "error", "niet gelukt", "niet beschikbaar",
+                                "not available", "unavailable", "al gereserveerd"]
+                if any(w in pagina for w in fout_woorden):
+                    raise RuntimeError("RESERVERING MISLUKT: fout op pagina (url=" + url_na + ")")
+                print("  AJAX-bevestiging: geen fout gevonden, succes aangenomen")
+            else:
+                raise RuntimeError("ONVERWACHTE URL na bevestiging: " + url_na)
 
             baan_naam = "Baan " + gekozen_baan
             eind      = speeltijd + timedelta(hours=1)
