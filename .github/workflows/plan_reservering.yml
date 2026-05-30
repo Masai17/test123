@@ -121,6 +121,31 @@ jobs:
           git diff --cached --quiet || true
           git push || true
  
+      - name: Sla direct op als wachtend
+        if: steps.bereken.outputs.actie == 'reserveer_nu'
+        env:
+          SPEEL_DATUM_TIJD: ${{ github.event.inputs.speel_datum_tijd }}
+          PARTNERS: ${{ github.event.inputs.partners }}
+        run: |
+          python3 << 'PYEOF'
+          import json, os
+          tekst    = os.environ["SPEEL_DATUM_TIJD"].strip()
+          partners = os.environ.get("PARTNERS", "").strip()
+          bestand  = "reserveringen.json"
+          reserveringen = json.load(open(bestand)) if os.path.exists(bestand) else []
+          if not any(r["speeltijd"].strip() == tekst for r in reserveringen):
+              reserveringen.append({"speeltijd": tekst, "partners": partners, "gedaan": False})
+              with open(bestand, "w") as f:
+                  json.dump(reserveringen, f, indent=2)
+              print(f"Opgeslagen als wachtend: {tekst}")
+          PYEOF
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add reserveringen.json
+          git pull --rebase --autostash
+          git diff --cached --quiet || git commit -m "Reservering gestart: ${{ github.event.inputs.speel_datum_tijd }}"
+          git push || true
+
       - name: Python + Playwright installeren
         if: steps.bereken.outputs.actie == 'reserveer_nu'
         run: |
