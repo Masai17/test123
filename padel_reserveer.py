@@ -410,26 +410,28 @@ async def reserveer(speeltijd, baan_volgorde, partners):
             # Stap 6: Bevestigen
             print("Bevestigen...")
             await asyncio.sleep(1)
+            await accepteer_cookie_banner()
+            await asyncio.sleep(0.5)
+
             bevestigd = False
-            for sel in ["#confirmReservationButton", "a.btn-primary", "a[data-url*=SaveReservation]"]:
+            for sel in ["#confirmReservationButton", "button:has-text('Bevestigen')",
+                        "a.btn-primary", "a[data-url*=SaveReservation]"]:
                 try:
                     el = page.locator(sel).first
                     if await el.is_visible(timeout=3000):
                         await el.click()
-                        await page.wait_for_load_state("load", timeout=15000)
+                        try:
+                            await page.wait_for_url(
+                                lambda url: "ReservationsConfirm" not in url,
+                                timeout=10000
+                            )
+                        except Exception:
+                            await page.wait_for_load_state("load", timeout=10000)
                         print("  Bevestigen OK: " + sel)
                         bevestigd = True
                         break
                 except Exception:
                     continue
-            if not bevestigd:
-                try:
-                    await page.get_by_role("link", name="Bevestigen").click(timeout=5000)
-                    await page.wait_for_load_state("load", timeout=15000)
-                    print("  Bevestigen OK (link)")
-                    bevestigd = True
-                except Exception:
-                    pass
             if not bevestigd:
                 raise RuntimeError("BEVESTIGEN MISLUKT: knop niet gevonden")
 
