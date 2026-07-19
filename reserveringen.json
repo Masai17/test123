@@ -3,5 +3,10 @@
     "speeltijd": "31-05-2026 16:30",
     "partners": "Rens dekker",
     "gedaan": true
+  },
+  {
+    "speeltijd": "21-07-2026 20:30",
+    "partners": "Ed rip,Yorrick bussink,Theo Herkenraad",
+    "gedaan": false
   }
 ]
