@@ -125,27 +125,57 @@ jobs:
           path: /tmp/padel_screenshot.png
           retention-days: 3
 
-      - name: Markeer als gedaan
+      - name: Markeer als gedaan (met retry)
         if: success() && steps.check.outputs.moet_reserveren == 'ja'
+        env:
+          SPEEL_DATUM_TIJD: ${{ steps.check.outputs.speel_datum_tijd }}
+          PARTNERS: ${{ steps.check.outputs.partners }}
         run: |
-          python3 << 'PYEOF'
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+          gelukt=0
+          for poging in 1 2 3 4 5; do
+            git fetch origin main -q
+            git reset --hard origin/main -q
+
+            python3 << 'PYEOF'
           import json, os
-          tekst = os.environ.get("SPEEL_DATUM_TIJD", "").strip()
-          with open("reserveringen.json") as f:
-              reserveringen = json.load(f)
+          tekst    = os.environ.get("SPEEL_DATUM_TIJD", "").strip()
+          partners = os.environ.get("PARTNERS", "").strip()
+          bestand  = "reserveringen.json"
+          reserveringen = json.load(open(bestand)) if os.path.exists(bestand) else []
           for r in reserveringen:
               if r["speeltijd"].strip() == tekst:
                   r["gedaan"] = True
-                  print(f"Gedaan: {tekst}")
                   break
-          with open("reserveringen.json", "w") as f:
+          else:
+              reserveringen.append({"speeltijd": tekst, "partners": partners, "gedaan": True})
+          with open(bestand, "w") as f:
               json.dump(reserveringen, f, indent=2)
+          print(f"Opgeslagen als gedaan: {tekst}")
           PYEOF
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add reserveringen.json
-          git pull --rebase --autostash
-          git diff --cached --quiet || git commit -m "Reservering uitgevoerd: ${{ steps.check.outputs.speel_datum_tijd }}"
-          git push || true
-        env:
-          SPEEL_DATUM_TIJD: ${{ steps.check.outputs.speel_datum_tijd }}
+
+            git add reserveringen.json
+            if git diff --cached --quiet; then
+              echo "Geen wijziging nodig (poging $poging)."
+              gelukt=1
+              break
+            fi
+
+            git commit -m "Reservering uitgevoerd: ${{ steps.check.outputs.speel_datum_tijd }}"
+
+            if git push origin HEAD:main; then
+              echo "Gepusht (poging $poging)."
+              gelukt=1
+              break
+            fi
+
+            echo "Push mislukt (poging $poging) - iemand anders was sneller, opnieuw proberen..."
+            sleep $(( (RANDOM % 4) + 1 ))
+          done
+
+          if [ "$gelukt" != "1" ]; then
+            echo "::error::Kon reserveringen.json niet bijwerken na 5 pogingen (blijvende conflicten)."
+            exit 1
+          fi
