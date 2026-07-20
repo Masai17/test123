@@ -35,30 +35,33 @@ Boekingsvenster KNLTB = speeltijd − 36 uur
 | 11 | Slaapdrempel 6u te dicht bij GitHub timeout (370 min) | Drempel verlaagd naar 5u |
 | 12 | Reserveringen direct uitgevoerd zonder JSON-entry | Stap toegevoegd: sla altijd op als `gedaan: true` na succesvolle run |
 | 13 | Te traag na openingsmoment: dependencies installeren + login/partners/dag-navigatie gebeurden pas ná het exacte openingsmoment (~30-90s verlies), en een bezette baan liet Playwright 30s blind hangen | Dependencies nu vóór het wachten geïnstalleerd; login/partners/dag-selectie gebeuren al binnen een voorbereidingsbuffer van 3 min vóór opening; dag- en baanselectie pollen nu elke 150ms en klikken direct via JS zodra een cel niet meer disabled is (geen 30s-timeout meer) |
+| 14 | Elke reservering = nieuwe login = KNLTB-telefoon-app logt gebruiker uit (bevestigd: 2 losse browsersessies met zelfde account hinderden elkaar niet op websiteniveau, dus het inlog-*event* zelf is de trigger, niet "2 sessies tegelijk") | Nieuwe secret `KNLTB_SESSION_STATE` (cookies van een ingelogde sessie, buiten de repo om als encrypted GitHub Secret). Script probeert die eerst; alleen bij verlopen sessie valt hij terug op een echte login |
+| 15 | `plan_reservering.yml` (directe aanvraag in de app) had de fixes van #13/#14 niet: dependencies nog na het wachten, geen sessie-hergebruik | Zelfde structuur als `padel_watcher.yml` toegepast: dependencies vooraf, prep-buffer, sessie-hergebruik, `OPENT_ISO` doorgegeven |
+| 16 | Race condition: 2 gelijktijdige workflow-runs die allebei `reserveringen.json` wijzigen kunnen op een merge-conflict lopen via `git pull --rebase --autostash`, waardoor een aanvraag stilletjes verloren gaat (gebeurde echt tijdens testen op 20-07-2026) | Alle 4 schrijfplekken (opslaan bij aanvraag, opslaan als wachtend, 2x markeren als gedaan) gebruiken nu een retry-loop: fetch + `reset --hard origin/main`, wijziging vers toepassen, commit, push; bij falende push (race) tot 5x opnieuw |
 
 ---
 
 ## Nog openstaande problemen
 
-### Hoofdprobleem: Playwright reservering werkt niet betrouwbaar
+### Hoofdprobleem: Playwright reservering werkt niet betrouwbaar (voor deel opgelost, zie hieronder)
 
-Symptomen:
-- **"DAG NIET GEKLIKT"** — kalender toont de gewenste datum niet (bijv. vandaag boeken kan niet op KNLTB)
-- **URL verandert niet na Volgende** — knop geklikt maar pagina ging niet vooruit
-- **Baan niet gevonden** — dag niet geselecteerd, dus baanrooster leeg
+Meest waarschijnlijke resterende oorzaken:
+1. `playwright-stealth` installeert niet (versie-conflict), maar login werkt zonder — geen actie nodig
+2. Onbekend of `KNLTB_SESSION_STATE` in de praktijk lang genoeg geldig blijft om echt te helpen — moet blijken uit productiegebruik
 
-Meest waarschijnlijke oorzaken:
-1. KNLTB-site vereist dat je reserveert voor een **toekomstige** datum (niet dezelfde dag)
-2. De dag-selectie logica vindt de kolom wel maar klikt het dagdeel niet goed aan
-3. `playwright-stealth` installeert niet (versie-conflict), maar login werkt zonder
+### 20-07-2026: onderzoek "waarom geen reservering om 20:30" (opgelost)
+Reservering 21-07-2026 20:30 (Ed Rip, Yorrick Bussink, Theo Herkenraad) lukte niet, ook niet vlak na openingsmoment. Live DOM-inspectie toonde alle 4 padelbanen (F/G/H/I) als `disabled` op dat tijdstip, terwijl de tennisbanen dezelfde avond gewoon vrij waren — leek op een structurele blokkade. **Gebruiker bevestigde: dinsdag is geen vaste competitiedag, alle reserveringen gaan op aanvraag** — dus het was gewoon een kwestie van net te laat zijn na opening, geen structureel probleem. Bug #13 (timing) was dus wel degelijk de juiste fix. Reservering zelf is nadien verwijderd uit `reserveringen.json` (niet meer relevant).
 
-### Wat nog niet getest is met de nieuwe code
-De fixes (substring-dag-match, URL-checks, RuntimeError-crashes) zijn aangebracht maar **nog niet succesvol getest** op een echte toekomstige reservering met een geldig tijdslot.
+### Live tests lopen nog (gestart 20-07-2026 ~22:40)
+Twee testreserveringen met Rens Dekker, bedoeld om beide code-paden te verifiëren:
+- **22-07-2026 12:30** — binnen-5u-pad (`plan_reservering.yml` reserveert zelf, wacht tot opent 21-07 00:30). Run: https://github.com/Masai17/test123/actions/runs/29777112881
+- **23-07-2026 12:30** — buiten-5u-pad (opgeslagen voor de watcher, opent 22-07 00:30)
 
-### 20-07-2026: onderzoek "waarom geen reservering om 20:30"
-Reservering 21-07-2026 20:30 (Ed Rip, Yorrick Bussink, Theo Herkenraad) lukte niet ondanks meerdere pogingen, ook vlak na het openingsmoment (08:30). Live DOM-inspectie via Playwright toonde: alle 4 padelbanen (F/G/H/I) hadden op dat tijdstip de class `disabled`, terwijl de tennisbanen (A-E) op exact dezelfde avond gewoon vrij waren. Dat wijst op een structurele blokkade (padelcompetitie/training elke dinsdagavond 19-21u), niet op een te trage app — al gaf de gebruiker aan dat volgens hun ervaring 5 minuten na opening al te laat kan zijn.
-Vervolgens is de timing sowieso verbeterd (zie bug #13), voor de gevallen waar wél echte concurrentie tussen leden meespeelt.
-**Open vraag**: is dinsdagavond 19-21u structureel padelcompetitie bij TC Westvoorne? Navragen bij de club om zeker te weten dat 20:30 op dinsdag sowieso nooit boekbaar is.
+**Bij volgende sessie checken:**
+- Is de 22-07-boeking gelukt? (`gh run view 29777112881 --repo Masai17/test123 --log`)
+- Bleef de telefoon-app ingelogd tijdens die run, of is er alsnog uitgelogd?
+- Heeft de watcher de 23-07-boeking succesvol opgepakt?
+- Stond er "Bewaarde sessie werkt nog" in de log, of viel hij terug op een nieuwe login?
 
 ---
 
@@ -66,9 +69,8 @@ Vervolgens is de timing sowieso verbeterd (zie bug #13), voor de gevallen waar w
 
 | Speeltijd | Partners | Status |
 |---|---|---|
-| 01-06-2026 20:30 | (zie app) | ⏳ Wacht — venster opent **31-05-2026 om 08:30** |
-
-De watcher reserveert morgenochtend automatisch op 08:30.
+| 22-07-2026 12:30 | Rens Dekker | ⏳ Test binnen-5u-pad, workflow loopt |
+| 23-07-2026 12:30 | Rens Dekker | ⏳ Test buiten-5u-pad, wacht op watcher |
 
 ---
 
@@ -78,4 +80,5 @@ De watcher reserveert morgenochtend automatisch op 08:30.
 - **Baan-voorkeur** na 19:00: G → F → H → I
 - **Baan-nummers** in selector: F=day6, G=day7, H=day8, I=day9
 - **Tijdslot-selector**: `#dayN div[data-hour="HH"]`
-- **GitHub account**: Masai17 (via `gh auth switch`)
+- **GitHub account voor dit repo**: **Masai17** (niet circus0181 — dat account heeft geen push-toegang tot `Masai17/test123`, getest en bevestigd op 20-07-2026; dit wijkt af van de standaard CLAUDE.md-regel maar is voor dit project zo afgesproken). `gh auth switch --user Masai17` vóór pushen.
+- **Secrets in de repo**: `KNLTB_GEBRUIKERSNUMMER`, `KNLTB_WACHTWOORD`, `KNLTB_WEBSITE`, `INTRODUCEE_EMAIL`, `KNLTB_SESSION_STATE` (nieuw, bevat cookies van een ingelogde sessie — nooit als bestand opslaan, alleen als secret)
