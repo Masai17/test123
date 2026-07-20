@@ -1,5 +1,5 @@
 name: Plan Reservering
- 
+
 on:
   workflow_dispatch:
     inputs:
@@ -10,7 +10,7 @@ on:
         description: "Partners (kommagescheiden)"
         required: false
         default: ""
- 
+
 concurrency:
   group: padel-reserveer-${{ github.event.inputs.speel_datum_tijd }}
   cancel-in-progress: false
@@ -21,71 +21,66 @@ jobs:
     timeout-minutes: 350  # max ~6 uur wachten + reserveren
     permissions:
       contents: write
- 
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
- 
-      - name: Bereken en wacht indien nodig
+
+      - name: Bereken wachttijd
         id: bereken
         env:
           SPEEL_DATUM_TIJD: ${{ github.event.inputs.speel_datum_tijd }}
           PARTNERS: ${{ github.event.inputs.partners }}
         run: |
           python3 << 'PYEOF'
-          import os, json, time
+          import os, json
           from datetime import datetime, timedelta
           from zoneinfo import ZoneInfo
- 
+
           NL       = ZoneInfo("Europe/Amsterdam")
           tekst    = os.environ["SPEEL_DATUM_TIJD"].strip()
           partners = os.environ.get("PARTNERS", "").strip()
- 
+
           for fmt in ("%d-%m-%Y %H:%M", "%Y-%m-%d %H:%M"):
               try:
                   speeltijd = datetime.strptime(tekst, fmt).replace(tzinfo=NL)
                   break
               except ValueError:
                   continue
- 
+
+          VOORBEREIDING = timedelta(minutes=3)
           opent = speeltijd - timedelta(hours=36)
           nu    = datetime.now(tz=NL)
-          seconden_tot_opening = (opent - nu).total_seconds()
- 
+          seconden_tot_voorbereiding = (opent - VOORBEREIDING - nu).total_seconds()
+
           print(f"Speeltijd:         {speeltijd.strftime('%d-%m-%Y om %H:%M')}")
           print(f"Partners:          {partners or '(geen)'}")
           print(f"Reservering opent: {opent.strftime('%d-%m-%Y om %H:%M')} NL")
           print(f"Nu:                {nu.strftime('%d-%m-%Y om %H:%M')} NL")
- 
-          zes_uur = 5 * 3600
 
-          if seconden_tot_opening <= 0:
-              # Reservering staat al open - direct reserveren
-              print(f"\nReservering staat al open! Direct reserveren...")
+          vijf_uur = 5 * 3600
+
+          if seconden_tot_voorbereiding <= vijf_uur:
+              # Opening (bijna) binnen bereik - deze run wacht en reserveert zelf
+              wacht_seconden = max(0, int(seconden_tot_voorbereiding))
+              print(f"\nVoorbereiding over {wacht_seconden}s - deze run reserveert zelf.")
               with open(os.environ["GITHUB_OUTPUT"], "a") as f:
                   f.write("actie=reserveer_nu\n")
- 
-          elif seconden_tot_opening <= zes_uur:
-              # Opening binnen 5 uur - wacht tot exact openingsmoment
-              minuten = int(seconden_tot_opening / 60)
-              print(f"\nOpening over {minuten} minuten - wachten tot {opent.strftime('%H:%M:%S')}...")
-              time.sleep(seconden_tot_opening)
-              print(f"Tijd bereikt! Nu reserveren...")
-              with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-                  f.write("actie=reserveer_nu\n")
- 
+                  f.write(f"wacht_seconden={wacht_seconden}\n")
+                  f.write(f"opent_iso={opent.isoformat()}\n")
+
           else:
-              # Opening verder dan 6 uur weg - sla op voor watcher
-              uren = int(seconden_tot_opening / 3600)
+              # Opening verder dan 5 uur weg - sla op voor watcher
+              uren = int(seconden_tot_voorbereiding / 3600)
               print(f"\nOpening over {uren} uur - sla op voor automatische watcher...")
- 
+
               bestand = "reserveringen.json"
               if os.path.exists(bestand):
                   with open(bestand) as f:
                       reserveringen = json.load(f)
               else:
                   reserveringen = []
- 
+
               # Voorkom duplicaten
               al_gepland = any(r["speeltijd"].strip() == tekst for r in reserveringen)
               if not al_gepland:
@@ -109,7 +104,7 @@ jobs:
                   status = "GEDAAN" if r["gedaan"] else "wachtend"
                   print(f"  {i}. {r['speeltijd']} [{status}]")
           PYEOF
- 
+
       - name: Commit opgeslagen reservering
         if: steps.bereken.outputs.actie == 'opgeslagen'
         run: |
@@ -120,7 +115,7 @@ jobs:
           git diff --cached --quiet || git commit -m "Reservering gepland: ${{ github.event.inputs.speel_datum_tijd }}"
           git diff --cached --quiet || true
           git push || true
- 
+
       - name: Sla direct op als wachtend
         if: steps.bereken.outputs.actie == 'reserveer_nu'
         env:
@@ -153,7 +148,13 @@ jobs:
           playwright install chromium
           playwright install-deps chromium
           sudo apt-get install -y xvfb
- 
+
+      - name: Wacht tot voorbereidingsmoment
+        if: steps.bereken.outputs.actie == 'reserveer_nu'
+        run: |
+          echo "Wacht ${{ steps.bereken.outputs.wacht_seconden }}s tot voorbereidingsmoment..."
+          sleep ${{ steps.bereken.outputs.wacht_seconden }}
+
       - name: Reserveren
         if: steps.bereken.outputs.actie == 'reserveer_nu'
         env:
@@ -163,6 +164,8 @@ jobs:
           INTRODUCEE_EMAIL: ${{ secrets.INTRODUCEE_EMAIL }}
           SPEEL_DATUM_TIJD: ${{ github.event.inputs.speel_datum_tijd }}
           PARTNERS: ${{ github.event.inputs.partners }}
+          OPENT_ISO: ${{ steps.bereken.outputs.opent_iso }}
+          KNLTB_SESSION_STATE: ${{ secrets.KNLTB_SESSION_STATE }}
           PYTHONUNBUFFERED: "1"
         run: xvfb-run --auto-servernum python padel_reserveer.py
 
@@ -210,4 +213,3 @@ jobs:
           git pull --rebase --autostash
           git commit -m "Reservering uitgevoerd: ${{ github.event.inputs.speel_datum_tijd }}"
           git push
-
