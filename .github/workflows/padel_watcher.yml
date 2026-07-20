@@ -15,42 +15,44 @@ jobs:
     timeout-minutes: 350
     permissions:
       contents: write
- 
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
- 
-      - name: Check en wacht indien nodig
+
+      - name: Bepaal of we moeten voorbereiden
         id: check
         run: |
           python3 << 'PYEOF'
-          import os, sys, json, time
+          import os, sys, json
           from datetime import datetime, timedelta
           from zoneinfo import ZoneInfo
- 
+
           NL = ZoneInfo("Europe/Amsterdam")
- 
+          VOORBEREIDING = timedelta(minutes=3)  # tijd om in te loggen/partners toe te voegen vóór opening
+
           bestand = "reserveringen.json"
           if not os.path.exists(bestand):
               print("Geen reserveringen gepland.")
               with open(os.environ["GITHUB_OUTPUT"], "a") as f:
                   f.write("moet_reserveren=nee\n")
               sys.exit(0)
- 
+
           with open(bestand) as f:
               reserveringen = json.load(f)
- 
+
           open_res = [r for r in reserveringen if not r.get("gedaan")]
           if not open_res:
               print("Alle reserveringen al gedaan.")
               with open(os.environ["GITHUB_OUTPUT"], "a") as f:
                   f.write("moet_reserveren=nee\n")
               sys.exit(0)
- 
+
           nu = datetime.now(tz=NL)
           print(f"[{nu.strftime('%d-%m-%Y %H:%M')}] {len(open_res)} open reservering(en):")
- 
+
           te_doen = None
+          te_doen_opent = None
           for r in open_res:
               tekst = r["speeltijd"].strip()
               for fmt in ("%d-%m-%Y %H:%M", "%Y-%m-%d %H:%M"):
@@ -59,40 +61,34 @@ jobs:
                       break
                   except ValueError:
                       continue
- 
-              opent        = speeltijd - timedelta(hours=36)
-              seconden_tot = (opent - datetime.now(tz=NL)).total_seconds()
- 
-              if seconden_tot > 5 * 3600:
-                  print(f"  - {tekst}: nog {int(seconden_tot/3600)} uur (opent {opent.strftime('%d-%m %H:%M')})")
 
-              elif seconden_tot > 0:
-                  # Binnen 5 uur: wacht tot exact openingsmoment
-                  print(f"  - {tekst}: opent over {int(seconden_tot/60)} min - wacht tot {opent.strftime('%H:%M:%S')}...")
-                  time.sleep(seconden_tot)
-                  print(f"  Tijd bereikt! Nu reserveren!")
-                  te_doen = r
-                  break
- 
-              elif seconden_tot > -(24 * 3600):
-                  # Opening was minder dan 24 uur geleden
-                  print(f"  - {tekst}: opening was {int(-seconden_tot/60)} min geleden - reserveren!")
-                  te_doen = r
-                  break
- 
+              opent                     = speeltijd - timedelta(hours=36)
+              seconden_tot_voorbereiding = (opent - VOORBEREIDING - nu).total_seconds()
+              seconden_sinds_open       = (nu - opent).total_seconds()
+
+              if seconden_tot_voorbereiding > 5 * 3600:
+                  print(f"  - {tekst}: nog {int(seconden_tot_voorbereiding/3600)} uur tot voorbereiding (opent {opent.strftime('%d-%m %H:%M')})")
+              elif seconden_sinds_open > 24 * 3600:
+                  print(f"  - {tekst}: te oud ({int(seconden_sinds_open/3600)} uur geleden) - overgeslagen")
               else:
-                  print(f"  - {tekst}: te oud ({int(-seconden_tot/3600)} uur geleden) - overgeslagen")
- 
+                  te_doen       = r
+                  te_doen_opent = opent
+                  break
+
           if te_doen:
+              wacht_seconden = max(0, int((te_doen_opent - VOORBEREIDING - nu).total_seconds()))
+              print(f"  -> {te_doen['speeltijd']}: wacht {wacht_seconden}s tot voorbereidingsmoment, opent om {te_doen_opent.strftime('%d-%m %H:%M:%S')}")
               with open(os.environ["GITHUB_OUTPUT"], "a") as f:
                   f.write("moet_reserveren=ja\n")
+                  f.write(f"wacht_seconden={wacht_seconden}\n")
+                  f.write(f"opent_iso={te_doen_opent.isoformat()}\n")
                   f.write(f"speel_datum_tijd={te_doen['speeltijd']}\n")
                   f.write(f"partners={te_doen.get('partners','')}\n")
           else:
               with open(os.environ["GITHUB_OUTPUT"], "a") as f:
                   f.write("moet_reserveren=nee\n")
           PYEOF
- 
+
       - name: Python + Playwright installeren
         if: steps.check.outputs.moet_reserveren == 'ja'
         run: |
@@ -100,7 +96,13 @@ jobs:
           playwright install chromium
           playwright install-deps chromium
           sudo apt-get install -y xvfb
- 
+
+      - name: Wacht tot voorbereidingsmoment
+        if: steps.check.outputs.moet_reserveren == 'ja'
+        run: |
+          echo "Wacht ${{ steps.check.outputs.wacht_seconden }}s tot voorbereidingsmoment..."
+          sleep ${{ steps.check.outputs.wacht_seconden }}
+
       - name: Reserveren
         if: steps.check.outputs.moet_reserveren == 'ja'
         env:
@@ -110,6 +112,7 @@ jobs:
           INTRODUCEE_EMAIL: ${{ secrets.INTRODUCEE_EMAIL }}
           SPEEL_DATUM_TIJD: ${{ steps.check.outputs.speel_datum_tijd }}
           PARTNERS: ${{ steps.check.outputs.partners }}
+          OPENT_ISO: ${{ steps.check.outputs.opent_iso }}
           PYTHONUNBUFFERED: "1"
         run: xvfb-run --auto-servernum python padel_reserveer.py
 

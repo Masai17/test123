@@ -11,10 +11,38 @@ WEBSITE           = os.getenv("KNLTB_WEBSITE", "")
 SPEEL_DATUM_TIJD  = os.getenv("SPEEL_DATUM_TIJD", "")
 PARTNERS          = os.getenv("PARTNERS", "")
 INTRODUCEE_EMAIL  = os.getenv("INTRODUCEE_EMAIL", "")
+OPENT_ISO         = os.getenv("OPENT_ISO", "").strip()
+
+POLL_GRACE     = timedelta(seconds=20)  # hoe lang na 'opent' we nog blijven pollen
+POLL_INTERVAL  = 0.15
 
 
 def nu_nl():
     return datetime.now(tz=NL)
+
+def parse_opent_iso(tekst):
+    if not tekst:
+        return None
+    try:
+        return datetime.fromisoformat(tekst)
+    except ValueError:
+        return None
+
+def poll_deadline(opent):
+    """Tot wanneer we mogen blijven pollen: net na het bekende openingsmoment,
+    of een korte vaste periode als dat moment niet is meegegeven (bv. handmatige test)."""
+    if opent:
+        return opent + POLL_GRACE
+    return nu_nl() + timedelta(seconds=20)
+
+async def poll_tot(check_fn, deadline):
+    while True:
+        resultaat = await check_fn()
+        if resultaat:
+            return resultaat
+        if nu_nl() >= deadline:
+            return None
+        await asyncio.sleep(POLL_INTERVAL)
 
 def parse_speeltijd(tekst):
     for fmt in ("%d-%m-%Y %H:%M", "%Y-%m-%d %H:%M"):
@@ -91,23 +119,24 @@ async def klik_volgende(page, verwachte_url_deel=None):
         )
 
 
-async def probeer_tijdcel(page, baan, speeltijd):
-    dag_nummer = {"F": "6", "G": "7", "H": "8", "I": "9"}[baan]
-    uur        = str(speeltijd.hour)
-    selector   = "#day" + dag_nummer + " div[data-hour=\"" + uur + "\"]"
-    print("  Probeer baan " + baan + " (" + selector + ")")
-    try:
-        tijdcel = page.locator(selector).first
-        await tijdcel.wait_for(state="visible", timeout=3000)
-        await tijdcel.scroll_into_view_if_needed()
-        await asyncio.sleep(0.3)
-        await tijdcel.click()
-        await asyncio.sleep(1.5)
-        print("  Baan " + baan + " geselecteerd!")
-        return True
-    except Exception as e:
-        print("  Baan " + baan + " niet beschikbaar: " + str(e)[:60])
-        return False
+async def check_en_klik_baan(page, baan_volgorde, uur):
+    """Kijkt in de DOM welke van de voorkeursbanen nu niet-disabled is en klikt
+    'm direct via JS (geen Playwright-actionability-wait die op een disabled
+    cel 30s blijft hangen)."""
+    dag_nummers = {"F": "6", "G": "7", "H": "8", "I": "9"}
+    for baan in baan_volgorde:
+        geklikt = await page.evaluate(
+            """([dagNr, uur]) => {
+                const cel = document.querySelector('#day' + dagNr + ' div[data-hour="' + uur + '"]');
+                if (!cel || cel.className.includes('disabled')) return false;
+                cel.click();
+                return true;
+            }""",
+            [dag_nummers[baan], uur],
+        )
+        if geklikt:
+            return baan
+    return None
 
 
 async def voeg_introducee_toe(page, naam, email):
@@ -158,6 +187,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
     tijd_str  = speeltijd.strftime("%H:%M")
     datum_dag = str(speeltijd.day)
     dagdeel   = bepaal_dagdeel(speeltijd)
+    opent     = parse_opent_iso(OPENT_ISO)
 
     dag_afkortingen = ["", "ma", "di", "wo", "do", "vr", "za", "zo"]
     zoek_tekst      = dag_afkortingen[speeltijd.isoweekday()] + " " + datum_dag
@@ -351,57 +381,52 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                 except PWTimeout:
                     break
 
-            dag_geklikt = False
+            datum_str = speeltijd.strftime("%Y-%m-%d")
 
-            # Strategie 1: JS via data-date + dagdeel-tekst (meest betrouwbaar)
-            try:
-                datum_str = speeltijd.strftime("%Y-%m-%d")
-                resultaat = await page.evaluate("""
-                    ([datum, dagdeelTekst]) => {
-                        // Probeer eerst niet-disabled
-                        for (const sel of ['.daypart:not(.disabled)', '.daypart', '[class*=daypart]']) {
-                            const els = document.querySelectorAll(sel);
+            async def daypart_beschikbaar():
+                try:
+                    return await page.evaluate("""
+                        ([datum, dagdeelTekst]) => {
+                            const els = document.querySelectorAll('.daypart:not(.disabled)');
                             for (const el of els) {
                                 const d = el.dataset.date || el.getAttribute('data-date') || '';
                                 if (!d.startsWith(datum)) continue;
                                 const t = (el.innerText || el.textContent || '').trim().toLowerCase();
                                 if (t === dagdeelTekst.toLowerCase()) {
                                     el.click();
-                                    return sel + '|' + d + '|' + el.className;
+                                    return d + '|' + el.className;
                                 }
                             }
+                            return null;
                         }
-                        return null;
-                    }
-                """, [datum_str, dagdeel])
-                if resultaat:
-                    print("  Dagdeel geklikt via data-date: " + str(resultaat))
-                    await asyncio.sleep(0.8)
-                    dag_geklikt = True
-                else:
-                    print("  data-date: geen match voor " + datum_str + "/" + dagdeel)
-            except Exception as e:
-                print("  data-date strategie fout: " + str(e)[:80])
+                    """, [datum_str, dagdeel])
+                except Exception as e:
+                    if "context was destroyed" in str(e).lower() or "execution context" in str(e).lower():
+                        return None
+                    raise
 
-            if not dag_geklikt:
+            resultaat = await poll_tot(daypart_beschikbaar, poll_deadline(opent))
+            if not resultaat:
                 raise RuntimeError("DAG NIET GEVONDEN IN KALENDER: " + zoek_tekst + " / " + dagdeel)
-
+            print("  Dagdeel geklikt via data-date: " + str(resultaat))
             await asyncio.sleep(0.5)
 
             # Volgende na dag — verwacht /me/ReservationsCourt
             await klik_volgende(page, verwachte_url_deel="/me/ReservationsCourt")
             print("  URL na dag: " + page.url)
 
-            # Stap 5: Tijdcel - probeer banen in volgorde
+            # Stap 5: Tijdcel - poll de voorkeursbanen en klik zodra er een vrij is
             print("Tijdslot " + tijd_str + " voorkeur: " + str(baan_volgorde))
-            gekozen_baan = None
-            for baan in baan_volgorde:
-                if await probeer_tijdcel(page, baan, speeltijd):
-                    gekozen_baan = baan
-                    break
+            uur = str(speeltijd.hour)
 
+            async def baan_beschikbaar():
+                return await check_en_klik_baan(page, baan_volgorde, uur)
+
+            gekozen_baan = await poll_tot(baan_beschikbaar, poll_deadline(opent))
             if not gekozen_baan:
                 raise RuntimeError("GEEN BAAN BESCHIKBAAR - reservering afgebroken")
+            print("  Baan " + gekozen_baan + " geselecteerd!")
+            await asyncio.sleep(0.5)
 
             # Volgende na baan — verwacht /me/ReservationsConfirm
             await klik_volgende(page, verwachte_url_deel="/me/ReservationsConfirm")
@@ -482,10 +507,13 @@ async def main():
     baan_volgorde = bepaal_baan_volgorde(speeltijd)
     partners      = [p.strip() for p in PARTNERS.split(",") if p.strip()] if PARTNERS else []
 
+    opent = parse_opent_iso(OPENT_ISO)
+
     print("Speeltijd:     " + speeltijd.strftime('%d-%m-%Y om %H:%M') + " (NL tijd)")
     print("Baan volgorde: " + str(baan_volgorde))
     print("Partners:      " + (", ".join(partners) if partners else "(geen)"))
     print("Nu:            " + nu_nl().strftime('%d-%m-%Y om %H:%M:%S') + " (NL tijd)")
+    print("Opent:         " + (opent.strftime('%d-%m-%Y om %H:%M:%S') if opent else "(onbekend - handmatige test?)"))
     print()
 
     await reserveer(speeltijd, baan_volgorde, partners)
