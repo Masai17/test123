@@ -6,15 +6,19 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: padel-watcher
+  group: padel-watcher-check
   cancel-in-progress: false
 
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
-    permissions:
-      contents: write
+    timeout-minutes: 10
+    outputs:
+      moet_reserveren: ${{ steps.check.outputs.moet_reserveren }}
+      wacht_seconden: ${{ steps.check.outputs.wacht_seconden }}
+      opent_iso: ${{ steps.check.outputs.opent_iso }}
+      speel_datum_tijd: ${{ steps.check.outputs.speel_datum_tijd }}
+      partners: ${{ steps.check.outputs.partners }}
 
     steps:
       - name: Checkout
@@ -89,8 +93,42 @@ jobs:
                   f.write("moet_reserveren=nee\n")
           PYEOF
 
+  reserveer:
+    needs: check
+    if: needs.check.outputs.moet_reserveren == 'ja'
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    permissions:
+      contents: write
+    concurrency:
+      group: padel-reserveer-${{ needs.check.outputs.speel_datum_tijd }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check of intussen al gedaan
+        id: nogcheck
+        env:
+          SPEEL_DATUM_TIJD: ${{ needs.check.outputs.speel_datum_tijd }}
+        run: |
+          git fetch origin main -q
+          git reset --hard origin/main -q
+
+          python3 << 'PYEOF'
+          import json, os
+          tekst = os.environ["SPEEL_DATUM_TIJD"].strip()
+          bestand = "reserveringen.json"
+          reserveringen = json.load(open(bestand)) if os.path.exists(bestand) else []
+          al_gedaan = any(r["speeltijd"].strip() == tekst and r.get("gedaan") for r in reserveringen)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"al_gedaan={'ja' if al_gedaan else 'nee'}\n")
+          print(f"Al gedaan (bijv. door directe app-aanvraag terwijl watcher wachtte): {al_gedaan}")
+          PYEOF
+
       - name: Python + Playwright installeren
-        if: steps.check.outputs.moet_reserveren == 'ja'
+        if: steps.nogcheck.outputs.al_gedaan != 'ja'
         run: |
           pip install playwright -q
           playwright install chromium
@@ -98,21 +136,21 @@ jobs:
           sudo apt-get install -y xvfb
 
       - name: Wacht tot voorbereidingsmoment
-        if: steps.check.outputs.moet_reserveren == 'ja'
+        if: steps.nogcheck.outputs.al_gedaan != 'ja'
         run: |
-          echo "Wacht ${{ steps.check.outputs.wacht_seconden }}s tot voorbereidingsmoment..."
-          sleep ${{ steps.check.outputs.wacht_seconden }}
+          echo "Wacht ${{ needs.check.outputs.wacht_seconden }}s tot voorbereidingsmoment..."
+          sleep ${{ needs.check.outputs.wacht_seconden }}
 
       - name: Reserveren
-        if: steps.check.outputs.moet_reserveren == 'ja'
+        if: steps.nogcheck.outputs.al_gedaan != 'ja'
         env:
           KNLTB_GEBRUIKERSNUMMER: ${{ secrets.KNLTB_GEBRUIKERSNUMMER }}
           KNLTB_WACHTWOORD: ${{ secrets.KNLTB_WACHTWOORD }}
           KNLTB_WEBSITE: ${{ secrets.KNLTB_WEBSITE }}
           INTRODUCEE_EMAIL: ${{ secrets.INTRODUCEE_EMAIL }}
-          SPEEL_DATUM_TIJD: ${{ steps.check.outputs.speel_datum_tijd }}
-          PARTNERS: ${{ steps.check.outputs.partners }}
-          OPENT_ISO: ${{ steps.check.outputs.opent_iso }}
+          SPEEL_DATUM_TIJD: ${{ needs.check.outputs.speel_datum_tijd }}
+          PARTNERS: ${{ needs.check.outputs.partners }}
+          OPENT_ISO: ${{ needs.check.outputs.opent_iso }}
           KNLTB_SESSION_STATE: ${{ secrets.KNLTB_SESSION_STATE }}
           PYTHONUNBUFFERED: "1"
         run: xvfb-run --auto-servernum python padel_reserveer.py
@@ -126,10 +164,10 @@ jobs:
           retention-days: 3
 
       - name: Markeer als gedaan (met retry)
-        if: success() && steps.check.outputs.moet_reserveren == 'ja'
+        if: success() && steps.nogcheck.outputs.al_gedaan != 'ja'
         env:
-          SPEEL_DATUM_TIJD: ${{ steps.check.outputs.speel_datum_tijd }}
-          PARTNERS: ${{ steps.check.outputs.partners }}
+          SPEEL_DATUM_TIJD: ${{ needs.check.outputs.speel_datum_tijd }}
+          PARTNERS: ${{ needs.check.outputs.partners }}
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
@@ -163,7 +201,7 @@ jobs:
               break
             fi
 
-            git commit -m "Reservering uitgevoerd: ${{ steps.check.outputs.speel_datum_tijd }}"
+            git commit -m "Reservering uitgevoerd: ${{ needs.check.outputs.speel_datum_tijd }}"
 
             if git push origin HEAD:main; then
               echo "Gepusht (poging $poging)."
