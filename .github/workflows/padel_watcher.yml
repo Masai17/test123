@@ -113,6 +113,7 @@ jobs:
           SPEEL_DATUM_TIJD: ${{ steps.check.outputs.speel_datum_tijd }}
           PARTNERS: ${{ steps.check.outputs.partners }}
           OPENT_ISO: ${{ steps.check.outputs.opent_iso }}
+          KNLTB_SESSION_STATE: ${{ secrets.KNLTB_SESSION_STATE }}
           PYTHONUNBUFFERED: "1"
         run: xvfb-run --auto-servernum python padel_reserveer.py
 

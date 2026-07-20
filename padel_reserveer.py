@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -12,6 +13,7 @@ SPEEL_DATUM_TIJD  = os.getenv("SPEEL_DATUM_TIJD", "")
 PARTNERS          = os.getenv("PARTNERS", "")
 INTRODUCEE_EMAIL  = os.getenv("INTRODUCEE_EMAIL", "")
 OPENT_ISO         = os.getenv("OPENT_ISO", "").strip()
+SESSION_STATE_JSON = os.getenv("KNLTB_SESSION_STATE", "").strip()
 
 POLL_GRACE     = timedelta(seconds=20)  # hoe lang na 'opent' we nog blijven pollen
 POLL_INTERVAL  = 0.15
@@ -26,6 +28,14 @@ def parse_opent_iso(tekst):
     try:
         return datetime.fromisoformat(tekst)
     except ValueError:
+        return None
+
+def parse_session_state(tekst):
+    if not tekst:
+        return None
+    try:
+        return json.loads(tekst)
+    except (json.JSONDecodeError, ValueError):
         return None
 
 def poll_deadline(opent):
@@ -199,10 +209,14 @@ async def reserveer(speeltijd, baan_volgorde, partners):
             args=["--disable-blink-features=AutomationControlled"],
         )
 
-        context = await browser.new_context(
-            viewport={"width": 1280, "height": 900},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        )
+        session_state = parse_session_state(SESSION_STATE_JSON)
+        context_opties = {
+            "viewport": {"width": 1280, "height": 900},
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        }
+        if session_state:
+            context_opties["storage_state"] = session_state
+        context = await browser.new_context(**context_opties)
 
         page = await context.new_page()
 
@@ -217,21 +231,36 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                 except Exception:
                     pass
 
-            # Stap 0: Inloggen
-            print("Inloggen...")
-            await page.goto(WEBSITE, wait_until="domcontentloaded", timeout=60000)
-            await accepteer_cookie_banner()
-            try:
-                await page.select_option("select", label="Bondsnummer")
-            except Exception:
-                pass
-            await asyncio.sleep(0.3)
-            await page.locator('input[type="text"]').first.fill(GEBRUIKERSNUMMER)
-            await page.fill('input[type="password"]', WACHTWOORD)
-            login_knop = page.locator("button:has-text('Log in'), button:has-text('Inloggen')").first
-            await login_knop.click(timeout=15000)
-            await page.wait_for_load_state("load", timeout=20000)
-            print("  Ingelogd! URL: " + page.url)
+            # Stap 0: Inloggen — probeer eerst de bewaarde sessie (geen nieuw inlog-event)
+            ingelogd_via_sessie = False
+            if session_state:
+                print("Probeer bewaarde sessie (KNLTB_SESSION_STATE)...")
+                try:
+                    await page.goto(WEBSITE.rstrip("/") + "/me/ReservationsPlayers", wait_until="domcontentloaded", timeout=30000)
+                    await accepteer_cookie_banner()
+                    if "/me/Reservations" in page.url:
+                        ingelogd_via_sessie = True
+                        print("  Bewaarde sessie werkt nog - geen nieuwe login nodig")
+                    else:
+                        print("  Bewaarde sessie verlopen (URL: " + page.url + ") - normaal inloggen")
+                except Exception as e:
+                    print("  Bewaarde sessie mislukt: " + str(e)[:80] + " - normaal inloggen")
+
+            if not ingelogd_via_sessie:
+                print("Inloggen...")
+                await page.goto(WEBSITE, wait_until="domcontentloaded", timeout=60000)
+                await accepteer_cookie_banner()
+                try:
+                    await page.select_option("select", label="Bondsnummer")
+                except Exception:
+                    pass
+                await asyncio.sleep(0.3)
+                await page.locator('input[type="text"]').first.fill(GEBRUIKERSNUMMER)
+                await page.fill('input[type="password"]', WACHTWOORD)
+                login_knop = page.locator("button:has-text('Log in'), button:has-text('Inloggen')").first
+                await login_knop.click(timeout=15000)
+                await page.wait_for_load_state("load", timeout=20000)
+                print("  Ingelogd! URL: " + page.url)
 
             # Stap 1+2: partners-stap bereiken (site redirect na login automatisch)
             await asyncio.sleep(1)
