@@ -232,17 +232,22 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                     pass
 
             # Stap 0: Inloggen — probeer eerst de bewaarde sessie (geen nieuw inlog-event)
+            # Let op: dit vervangt alleen het invullen van het inlogformulier. De navigatie
+            # erna (tab "Baan reserveringen" + knop "Baan afhangen") blijft nodig om de
+            # reserveringswizard op te starten — direct naar /me/ReservationsPlayers linken
+            # slaat die wizard-state over en levert een 404 op (bug: gebeurde bij elke run
+            # sinds sessie-hergebruik werd toegevoegd).
             ingelogd_via_sessie = False
             if session_state:
                 print("Probeer bewaarde sessie (KNLTB_SESSION_STATE)...")
                 try:
-                    await page.goto(WEBSITE.rstrip("/") + "/me/ReservationsPlayers", wait_until="domcontentloaded", timeout=30000)
+                    await page.goto(WEBSITE, wait_until="domcontentloaded", timeout=30000)
                     await accepteer_cookie_banner()
-                    if "/me/Reservations" in page.url:
+                    if await page.locator('input[type="password"]').count() == 0:
                         ingelogd_via_sessie = True
                         print("  Bewaarde sessie werkt nog - geen nieuwe login nodig")
                     else:
-                        print("  Bewaarde sessie verlopen (URL: " + page.url + ") - normaal inloggen")
+                        print("  Bewaarde sessie verlopen - normaal inloggen")
                 except Exception as e:
                     print("  Bewaarde sessie mislukt: " + str(e)[:80] + " - normaal inloggen")
 
