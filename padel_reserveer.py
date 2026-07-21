@@ -135,16 +135,32 @@ async def check_en_klik_baan(page, baan_volgorde, uur):
     cel 30s blijft hangen)."""
     dag_nummers = {"F": "6", "G": "7", "H": "8", "I": "9"}
     for baan in baan_volgorde:
-        geklikt = await page.evaluate(
+        info = await page.evaluate(
             """([dagNr, uur]) => {
                 const cel = document.querySelector('#day' + dagNr + ' div[data-hour="' + uur + '"]');
-                if (!cel || cel.className.includes('disabled')) return false;
+                if (!cel) return { gevonden: false };
+                if (cel.className.includes('disabled')) return { gevonden: true, disabled: true };
+                const voor = cel.className;
+                const html = cel.outerHTML.slice(0, 250);
                 cel.click();
-                return true;
+                return { gevonden: true, disabled: false, geklikt: true, classNameVoor: voor, outerHTML: html };
             }""",
             [dag_nummers[baan], uur],
         )
-        if geklikt:
+        if info.get("geklikt"):
+            # DEBUG (tijdelijk, voor diagnose baan-selectie-bug): verifieer of de klik
+            # daadwerkelijk een state-wijziging (bv. 'selected'-klasse) veroorzaakte.
+            await asyncio.sleep(0.3)
+            na = await page.evaluate(
+                """([dagNr, uur]) => {
+                    const cel = document.querySelector('#day' + dagNr + ' div[data-hour="' + uur + '"]');
+                    return cel ? cel.className : null;
+                }""",
+                [dag_nummers[baan], uur],
+            )
+            print("  DEBUG baan " + baan + " className voor klik: " + info.get("classNameVoor", ""))
+            print("  DEBUG baan " + baan + " className na klik:   " + str(na))
+            print("  DEBUG baan " + baan + " outerHTML: " + info.get("outerHTML", ""))
             return baan
     return None
 
