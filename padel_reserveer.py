@@ -129,39 +129,57 @@ async def klik_volgende(page, verwachte_url_deel=None):
         )
 
 
-async def check_en_klik_baan(page, baan_volgorde, uur):
-    """Kijkt in de DOM welke van de voorkeursbanen nu niet-disabled is en klikt
-    'm direct via JS (geen Playwright-actionability-wait die op een disabled
-    cel 30s blijft hangen)."""
+async def check_en_klik_baan(page, baan_volgorde, uur, tijd_str):
+    """Kijkt in de DOM welke van de voorkeursbanen nu niet-disabled is. De cel
+    zelf is een lege wrapper (onclick=""); de echte selectie zit in een
+    <select data-court="..."> erin, dus die kiezen we via Playwright's
+    select_option (vuurt het change-event dat de site nodig heeft)."""
     dag_nummers = {"F": "6", "G": "7", "H": "8", "I": "9"}
     for baan in baan_volgorde:
+        dagNr = dag_nummers[baan]
         info = await page.evaluate(
             """([dagNr, uur]) => {
                 const cel = document.querySelector('#day' + dagNr + ' div[data-hour="' + uur + '"]');
                 if (!cel) return { gevonden: false };
                 if (cel.className.includes('disabled')) return { gevonden: true, disabled: true };
                 const sel = cel.querySelector('select');
-                const opties = sel ? Array.from(sel.options).map(o => ({v: o.value, t: o.textContent.trim(), s: o.selected})) : null;
-                return {
-                    gevonden: true, disabled: false,
-                    className: cel.className,
-                    outerHTML: cel.outerHTML.slice(0, 2000),
-                    selectAanwezig: !!sel,
-                    selectName: sel ? sel.name : null,
-                    selectOpties: opties,
-                };
+                const opties = sel ? Array.from(sel.options).map(o => ({v: o.value, t: o.textContent.trim()})) : null;
+                return { gevonden: true, disabled: false, selectAanwezig: !!sel, selectOpties: opties };
             }""",
-            [dag_nummers[baan], uur],
+            [dagNr, uur],
         )
-        if info.get("disabled") or not info.get("gevonden"):
+        if info.get("disabled") or not info.get("gevonden") or not info.get("selectAanwezig"):
             continue
-        # DEBUG (tijdelijk, voor diagnose baan-selectie-bug): de cel-div zelf heeft
-        # onclick="" (leeg) - de echte interactie zit blijkbaar in een <select> erin.
-        print("  DEBUG baan " + baan + " className: " + info.get("className", ""))
-        print("  DEBUG baan " + baan + " select aanwezig: " + str(info.get("selectAanwezig")) + " naam: " + str(info.get("selectName")))
-        print("  DEBUG baan " + baan + " select opties: " + str(info.get("selectOpties")))
-        print("  DEBUG baan " + baan + " outerHTML: " + info.get("outerHTML", ""))
-        return None  # nog niet echt klikken/selecteren tot de juiste optie bekend is
+
+        opties = info.get("selectOpties") or []
+        print("  DEBUG baan " + baan + " select opties: " + str(opties))
+
+        gekozen_value = None
+        for o in opties:
+            if tijd_str in o["t"]:
+                gekozen_value = o["v"]
+                break
+        if gekozen_value is None:
+            for o in opties:
+                if o["v"]:
+                    gekozen_value = o["v"]
+                    break
+        if gekozen_value is None:
+            continue
+
+        select_locator = page.locator('#day' + dagNr + ' div[data-hour="' + uur + '"] select')
+        await select_locator.select_option(value=gekozen_value, timeout=3000)
+
+        na_waarde = await page.evaluate(
+            """([dagNr, uur]) => {
+                const sel = document.querySelector('#day' + dagNr + ' div[data-hour="' + uur + '"] select');
+                return sel ? sel.value : null;
+            }""",
+            [dagNr, uur],
+        )
+        print("  DEBUG baan " + baan + " select waarde na keuze: " + str(na_waarde) + " (gekozen: " + str(gekozen_value) + ")")
+        if na_waarde == gekozen_value:
+            return baan
     return None
 
 
@@ -470,7 +488,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
             uur = str(speeltijd.hour)
 
             async def baan_beschikbaar():
-                return await check_en_klik_baan(page, baan_volgorde, uur)
+                return await check_en_klik_baan(page, baan_volgorde, uur, tijd_str)
 
             gekozen_baan = await poll_tot(baan_beschikbaar, poll_deadline(opent))
             if not gekozen_baan:
