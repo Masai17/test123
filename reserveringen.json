@@ -3,5 +3,10 @@
     "speeltijd": "23-07-2026 12:30",
     "partners": "Rens dekker",
     "gedaan": true
+  },
+  {
+    "speeltijd": "24-07-2026 12:30",
+    "partners": "Rens dekker",
+    "gedaan": false
   }
 ]
