@@ -140,28 +140,28 @@ async def check_en_klik_baan(page, baan_volgorde, uur):
                 const cel = document.querySelector('#day' + dagNr + ' div[data-hour="' + uur + '"]');
                 if (!cel) return { gevonden: false };
                 if (cel.className.includes('disabled')) return { gevonden: true, disabled: true };
-                const voor = cel.className;
-                const html = cel.outerHTML.slice(0, 250);
-                cel.click();
-                return { gevonden: true, disabled: false, geklikt: true, classNameVoor: voor, outerHTML: html };
+                const sel = cel.querySelector('select');
+                const opties = sel ? Array.from(sel.options).map(o => ({v: o.value, t: o.textContent.trim(), s: o.selected})) : null;
+                return {
+                    gevonden: true, disabled: false,
+                    className: cel.className,
+                    outerHTML: cel.outerHTML.slice(0, 2000),
+                    selectAanwezig: !!sel,
+                    selectName: sel ? sel.name : null,
+                    selectOpties: opties,
+                };
             }""",
             [dag_nummers[baan], uur],
         )
-        if info.get("geklikt"):
-            # DEBUG (tijdelijk, voor diagnose baan-selectie-bug): verifieer of de klik
-            # daadwerkelijk een state-wijziging (bv. 'selected'-klasse) veroorzaakte.
-            await asyncio.sleep(0.3)
-            na = await page.evaluate(
-                """([dagNr, uur]) => {
-                    const cel = document.querySelector('#day' + dagNr + ' div[data-hour="' + uur + '"]');
-                    return cel ? cel.className : null;
-                }""",
-                [dag_nummers[baan], uur],
-            )
-            print("  DEBUG baan " + baan + " className voor klik: " + info.get("classNameVoor", ""))
-            print("  DEBUG baan " + baan + " className na klik:   " + str(na))
-            print("  DEBUG baan " + baan + " outerHTML: " + info.get("outerHTML", ""))
-            return baan
+        if info.get("disabled") or not info.get("gevonden"):
+            continue
+        # DEBUG (tijdelijk, voor diagnose baan-selectie-bug): de cel-div zelf heeft
+        # onclick="" (leeg) - de echte interactie zit blijkbaar in een <select> erin.
+        print("  DEBUG baan " + baan + " className: " + info.get("className", ""))
+        print("  DEBUG baan " + baan + " select aanwezig: " + str(info.get("selectAanwezig")) + " naam: " + str(info.get("selectName")))
+        print("  DEBUG baan " + baan + " select opties: " + str(info.get("selectOpties")))
+        print("  DEBUG baan " + baan + " outerHTML: " + info.get("outerHTML", ""))
+        return None  # nog niet echt klikken/selecteren tot de juiste optie bekend is
     return None
 
 
