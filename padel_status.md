@@ -38,30 +38,29 @@ Boekingsvenster KNLTB = speeltijd − 36 uur
 | 14 | Elke reservering = nieuwe login = KNLTB-telefoon-app logt gebruiker uit (bevestigd: 2 losse browsersessies met zelfde account hinderden elkaar niet op websiteniveau, dus het inlog-*event* zelf is de trigger, niet "2 sessies tegelijk") | Nieuwe secret `KNLTB_SESSION_STATE` (cookies van een ingelogde sessie, buiten de repo om als encrypted GitHub Secret). Script probeert die eerst; alleen bij verlopen sessie valt hij terug op een echte login |
 | 15 | `plan_reservering.yml` (directe aanvraag in de app) had de fixes van #13/#14 niet: dependencies nog na het wachten, geen sessie-hergebruik | Zelfde structuur als `padel_watcher.yml` toegepast: dependencies vooraf, prep-buffer, sessie-hergebruik, `OPENT_ISO` doorgegeven |
 | 16 | Race condition: 2 gelijktijdige workflow-runs die allebei `reserveringen.json` wijzigen kunnen op een merge-conflict lopen via `git pull --rebase --autostash`, waardoor een aanvraag stilletjes verloren gaat (gebeurde echt tijdens testen op 20-07-2026) | Alle 4 schrijfplekken (opslaan bij aanvraag, opslaan als wachtend, 2x markeren als gedaan) gebruiken nu een retry-loop: fetch + `reset --hard origin/main`, wijziging vers toepassen, commit, push; bij falende push (race) tot 5x opnieuw |
+| 17 | Sessie-hergebruik (#14/#15) linkte direct naar `/me/ReservationsPlayers` als kale URL; die pagina bestaat alleen als je er via de wizard komt (tab "Baan reserveringen" → knop "Baan afhangen"). Zonder die stappen toont de site een 404, terwijl de URL-substring-check (`"/me/Reservations" in page.url`) dat niet doorhad — dus elke run sinds 20-07-2026 avond ging blind door en strandde later op "partner niet gevonden" | Sessie-hergebruik vervangt nu alleen het invullen van het inlogformulier (check: is er een `input[type="password"]` zichtbaar op de root-URL?), niet de navigatie erna — dezelfde tab/knop-navigatie als bij een verse login wordt altijd doorlopen |
+| 18 | Tijdslot-cel (baan-selectie) is een lege wrapper-`div` met `onclick=""`; de echte interactie zit in een verborgen `<select data-court="...">` erin. `cel.click()` (uit bug #13) deed dus niets, de site toonde "Maak een keuze!" en Volgende kwam niet verder — vermoedelijk een sitewijziging na eerdere succesvolle boekingen | Kiest nu de bijpassende `<option>` (matcht op tijd, anders eerste met waarde) via Playwright's `select_option` i.p.v. `cel.click()`, en verifieert dat `select.value` ook echt is doorgevoerd voor er verder wordt geklikt |
 
 ---
 
 ## Nog openstaande problemen
 
-### Hoofdprobleem: Playwright reservering werkt niet betrouwbaar (voor deel opgelost, zie hieronder)
+### Hoofdprobleem: Playwright reservering werkt niet betrouwbaar (opgelost, zie #17/#18 hierboven — bevestigd werkend op 22-07-2026)
 
-Meest waarschijnlijke resterende oorzaken:
+Resterende aandachtspunten, geen bekende bugs meer:
 1. `playwright-stealth` installeert niet (versie-conflict), maar login werkt zonder — geen actie nodig
-2. Onbekend of `KNLTB_SESSION_STATE` in de praktijk lang genoeg geldig blijft om echt te helpen — moet blijken uit productiegebruik
+2. Onbekend of `KNLTB_SESSION_STATE` op lange termijn (weken) geldig blijft, of ooit ververst moet worden
+3. GitHub Actions `schedule`-cron (`padel_watcher.yml`, elke 15 min) is "best effort" en kan bij lage repo-activiteit 30 min tot een paar uur vertragen — geen bug in de code, maar houd er rekening mee dat de watcher een boeking dus later kan oppakken dan gepland. Bij tijdsdruk: handmatig triggeren via `gh workflow run "Padel Watcher" --repo Masai17/test123`
 
 ### 20-07-2026: onderzoek "waarom geen reservering om 20:30" (opgelost)
 Reservering 21-07-2026 20:30 (Ed Rip, Yorrick Bussink, Theo Herkenraad) lukte niet, ook niet vlak na openingsmoment. Live DOM-inspectie toonde alle 4 padelbanen (F/G/H/I) als `disabled` op dat tijdstip, terwijl de tennisbanen dezelfde avond gewoon vrij waren — leek op een structurele blokkade. **Gebruiker bevestigde: dinsdag is geen vaste competitiedag, alle reserveringen gaan op aanvraag** — dus het was gewoon een kwestie van net te laat zijn na opening, geen structureel probleem. Bug #13 (timing) was dus wel degelijk de juiste fix. Reservering zelf is nadien verwijderd uit `reserveringen.json` (niet meer relevant).
 
-### Live tests lopen nog (gestart 20-07-2026 ~22:40)
-Twee testreserveringen met Rens Dekker, bedoeld om beide code-paden te verifiëren:
-- **22-07-2026 12:30** — binnen-5u-pad (`plan_reservering.yml` reserveert zelf, wacht tot opent 21-07 00:30). Run: https://github.com/Masai17/test123/actions/runs/29777112881
-- **23-07-2026 12:30** — buiten-5u-pad (opgeslagen voor de watcher, opent 22-07 00:30)
+### 21/22-07-2026: "waarom heeft mijn reservering het niet gedaan" (opgelost, zie bugs #17 en #18)
+Beide testreserveringen (22-07 en 23-07, Rens Dekker) faalden op elke poging, zowel via `plan_reservering.yml` als de watcher. Root cause was tweeledig en kwam pas na diepe DOM-diagnose (screenshots + class/HTML-dumps uit de Actions-runs) aan het licht:
+1. Sessie-hergebruik deep-linkte naar een pagina die zonder wizard-navigatie een 404 gaf (bug #17) — hierdoor kwam de flow nooit verder dan de partners-stap.
+2. Na fix van #17 bleek de baan-tijdslot-selectie zelf ook kapot: een lege wrapper-div i.p.v. een `<select>`-keuze (bug #18).
 
-**Bij volgende sessie checken:**
-- Is de 22-07-boeking gelukt? (`gh run view 29777112881 --repo Masai17/test123 --log`)
-- Bleef de telefoon-app ingelogd tijdens die run, of is er alsnog uitgelogd?
-- Heeft de watcher de 23-07-boeking succesvol opgepakt?
-- Stond er "Bewaarde sessie werkt nog" in de log, of viel hij terug op een nieuwe login?
+Gebruiker verwijderde de twee vastgelopen testreserveringen op 22-07-2026 via de app. Na beide fixes is een verse testreservering (23-07-2026 12:30, Rens Dekker) aangemaakt en **succesvol bevestigd**: "KLAAR! Baan F op 23-07-2026 om 12:30-13:30" (run [29902086705](https://github.com/Masai17/test123/actions/runs/29902086705)).
 
 ---
 
@@ -69,8 +68,7 @@ Twee testreserveringen met Rens Dekker, bedoeld om beide code-paden te verifiër
 
 | Speeltijd | Partners | Status |
 |---|---|---|
-| 22-07-2026 12:30 | Rens Dekker | ⏳ Test binnen-5u-pad, workflow loopt |
-| 23-07-2026 12:30 | Rens Dekker | ⏳ Test buiten-5u-pad, wacht op watcher |
+| 23-07-2026 12:30 | Rens dekker | ✅ Bevestigd — Baan F, 12:30-13:30 |
 
 ---
 

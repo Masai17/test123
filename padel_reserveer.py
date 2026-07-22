@@ -152,7 +152,6 @@ async def check_en_klik_baan(page, baan_volgorde, uur, tijd_str):
             continue
 
         opties = info.get("selectOpties") or []
-        print("  DEBUG baan " + baan + " select opties: " + str(opties))
 
         gekozen_value = None
         for o in opties:
@@ -177,7 +176,6 @@ async def check_en_klik_baan(page, baan_volgorde, uur, tijd_str):
             }""",
             [dagNr, uur],
         )
-        print("  DEBUG baan " + baan + " select waarde na keuze: " + str(na_waarde) + " (gekozen: " + str(gekozen_value) + ")")
         if na_waarde == gekozen_value:
             return baan
     return None
