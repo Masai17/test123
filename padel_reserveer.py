@@ -38,6 +38,16 @@ def parse_session_state(tekst):
     except (json.JSONDecodeError, ValueError):
         return None
 
+TUSSENVOEGSELS = {"van", "der", "den", "de", "het", "ter", "ten", "te", "aan", "in", "'t"}
+
+def titel_case_naam(naam):
+    woorden = naam.strip().split()
+    resultaat = []
+    for i, w in enumerate(woorden):
+        wl = w.lower()
+        resultaat.append(wl if i > 0 and wl in TUSSENVOEGSELS else wl.capitalize())
+    return " ".join(resultaat)
+
 def poll_deadline(opent):
     """Tot wanneer we mogen blijven pollen: net na het bekende openingsmoment,
     of een korte vaste periode als dat moment niet is meegegeven (bv. handmatige test)."""
@@ -392,6 +402,7 @@ async def reserveer(speeltijd, baan_volgorde, partners):
 
                 # Strategie B: zoekbalk
                 if not toegevoegd:
+                    naam_getypt = titel_case_naam(partner)
                     try:
                         for sel in ["input[placeholder*='Speler']", "input[placeholder*='speler']",
                                     "#searchPlayerText", "input[type='search']", "input[type='text']"]:
@@ -402,22 +413,54 @@ async def reserveer(speeltijd, baan_volgorde, partners):
                             zoek = page.locator("input").first
                         await zoek.click()
                         await zoek.fill("")
-                        await zoek.type(partner, delay=80)
-                        print("  Getypt: " + partner)
+                        await zoek.type(naam_getypt, delay=80)
+                        print("  Getypt: " + naam_getypt)
                         await asyncio.sleep(2.5)
-                        dropdown = page.locator(
-                            ".ui-autocomplete li, [class*=autocomplete] li, "
-                            "[class*=result] li, [class*=suggestion] li, [class*=dropdown] li"
-                        ).first
-                        await dropdown.wait_for(state="visible", timeout=5000)
-                        await dropdown.click()
-                        print("  + " + partner + " (zoekbalk)")
-                        toegevoegd = True
+
+                        # Breed op tekst matchen i.p.v. blind vertrouwen op 1 geraden CSS-class
+                        # (de dropdown-markup van de site is al eens zonder aankondiging veranderd)
+                        resultaat = await page.evaluate("""
+                            (naam) => {
+                                const stopwoorden = ['van','der','den','de','het','ter','ten','te'];
+                                const woorden = naam.toLowerCase().split(/\\s+/).filter(w => w.length > 1 && !stopwoorden.includes(w));
+                                const kandidaten = Array.from(document.querySelectorAll(
+                                    'li, [role="option"], [class*=result], [class*=suggestion], '
+                                    + '[class*=autocomplete], [class*=dropdown], [class*=typeahead], [class*=item], [class*=option]'
+                                ));
+                                for (const el of kandidaten) {
+                                    const t = (el.innerText || el.textContent || '').toLowerCase();
+                                    if (t.length < 200 && woorden.length > 0 && woorden.every(w => t.includes(w))) {
+                                        el.click();
+                                        return el.className || el.tagName;
+                                    }
+                                }
+                                return null;
+                            }
+                        """, naam_getypt)
+                        if resultaat:
+                            await asyncio.sleep(1)
+                            print("  + " + partner + " (zoekbalk, match: " + str(resultaat)[:60] + ")")
+                            toegevoegd = True
+                        else:
+                            dropdown = page.locator(
+                                ".ui-autocomplete li, [class*=autocomplete] li, "
+                                "[class*=result] li, [class*=suggestion] li, [class*=dropdown] li"
+                            ).first
+                            await dropdown.wait_for(state="visible", timeout=8000)
+                            await dropdown.click()
+                            print("  + " + partner + " (zoekbalk)")
+                            toegevoegd = True
                     except Exception as e:
                         print("  Zoek-strategie fout: " + str(e)[:80])
 
                 if not toegevoegd:
                     print("  WAARSCHUWING: " + partner + " niet gevonden")
+                    try:
+                        bestandsnaam = "/tmp/partner_niet_gevonden_" + partner.replace(" ", "_") + ".png"
+                        await page.screenshot(path=bestandsnaam)
+                        print("  Diagnose-screenshot: " + bestandsnaam)
+                    except Exception:
+                        pass
                 await asyncio.sleep(0.5)
 
             # Volgende na partners — verwacht /me/ReservationsDay

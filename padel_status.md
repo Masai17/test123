@@ -40,6 +40,7 @@ Boekingsvenster KNLTB = speeltijd − 36 uur
 | 16 | Race condition: 2 gelijktijdige workflow-runs die allebei `reserveringen.json` wijzigen kunnen op een merge-conflict lopen via `git pull --rebase --autostash`, waardoor een aanvraag stilletjes verloren gaat (gebeurde echt tijdens testen op 20-07-2026) | Alle 4 schrijfplekken (opslaan bij aanvraag, opslaan als wachtend, 2x markeren als gedaan) gebruiken nu een retry-loop: fetch + `reset --hard origin/main`, wijziging vers toepassen, commit, push; bij falende push (race) tot 5x opnieuw |
 | 17 | Sessie-hergebruik (#14/#15) linkte direct naar `/me/ReservationsPlayers` als kale URL; die pagina bestaat alleen als je er via de wizard komt (tab "Baan reserveringen" → knop "Baan afhangen"). Zonder die stappen toont de site een 404, terwijl de URL-substring-check (`"/me/Reservations" in page.url`) dat niet doorhad — dus elke run sinds 20-07-2026 avond ging blind door en strandde later op "partner niet gevonden" | Sessie-hergebruik vervangt nu alleen het invullen van het inlogformulier (check: is er een `input[type="password"]` zichtbaar op de root-URL?), niet de navigatie erna — dezelfde tab/knop-navigatie als bij een verse login wordt altijd doorlopen |
 | 18 | Tijdslot-cel (baan-selectie) is een lege wrapper-`div` met `onclick=""`; de echte interactie zit in een verborgen `<select data-court="...">` erin. `cel.click()` (uit bug #13) deed dus niets, de site toonde "Maak een keuze!" en Volgende kwam niet verder — vermoedelijk een sitewijziging na eerdere succesvolle boekingen | Kiest nu de bijpassende `<option>` (matcht op tijd, anders eerste met waarde) via Playwright's `select_option` i.p.v. `cel.click()`, en verifieert dat `select.value` ook echt is doorgevoerd voor er verder wordt geklikt |
+| 19 | Partner die niet als "recente partner" op de pagina staat (dus via de zoekbalk moet worden gevonden i.p.v. de JS-strategie op zichtbare tekst) werd niet gevonden: de dropdown verscheen nooit binnen 5s. Gebeurde 2x op rij voor "Erwin van winden" (25-07-2026 14:30) — de boeking ging wél door, maar zonder hem, want een niet-gevonden partner is nooit een harde stop geweest. Vermoedelijke oorzaak: hoofdlettergevoelige match op de club-site (ingevoerd "van winden" i.p.v. "van Winden") en/of een dropdown-class die niet in de geraden CSS-selectorlijst zit | Naam wordt nu met correcte hoofdletters getypt (Nederlandse tussenvoegsels blijven lowercase); daarnaast scant een brede JS-tekstmatch alle waarschijnlijke dropdown-elementen (niet alleen de geraden CSS-classes) voor bij falen wordt automatisch een screenshot bewaard (`partner_niet_gevonden_<naam>.png`, geüpload als artifact) zodat een volgende miss meteen te diagnosticeren is. Nog niet in het echt bevestigd — pas te verifiëren bij de volgende reservering met een partner die niet al "bekend" is op de pagina |
 
 ---
 
@@ -62,6 +63,9 @@ Beide testreserveringen (22-07 en 23-07, Rens Dekker) faalden op elke poging, zo
 
 Gebruiker verwijderde de twee vastgelopen testreserveringen op 22-07-2026 via de app. Na beide fixes is een verse testreservering (23-07-2026 12:30, Rens Dekker) aangemaakt en **succesvol bevestigd**: "KLAAR! Baan F op 23-07-2026 om 12:30-13:30" (run [29902086705](https://github.com/Masai17/test123/actions/runs/29902086705)).
 
+### 24-07-2026: "waarom was Erwin van winden niet toegevoegd aan de reservering" (zie bug #19)
+Reservering 25-07-2026 14:30 (Rens Dekker, Yorrick Bussink, Erwin van winden) werd bevestigd — "KLAAR! Baan F op 25-07-2026 om 14:30-15:30" (run [30053968729](https://github.com/Masai17/test123/actions/runs/30053968729)) — maar zonder Erwin. Rens en Yorrick werden via Strategie A (JS-match op reeds zichtbare tekst, "recente partners") gevonden; Erwin niet, dus het script viel terug op de zoekbalk (Strategie B) en die dropdown verscheen 2x op rij niet binnen de timeout. Een niet-gevonden partner was nooit een harde stop, dus de boeking ging gewoon door. **Gebruiker heeft Erwin zelf handmatig toegevoegd aan de al bevestigde boeking.** Fix voor de toekomst: zie bug #19 hierboven (correcte hoofdletters + brede tekstmatch + diagnose-screenshot bij falen). Nog niet in het echt bevestigd.
+
 ---
 
 ## Geplande reserveringen
@@ -69,6 +73,8 @@ Gebruiker verwijderde de twee vastgelopen testreserveringen op 22-07-2026 via de
 | Speeltijd | Partners | Status |
 |---|---|---|
 | 23-07-2026 12:30 | Rens dekker | ✅ Bevestigd — Baan F, 12:30-13:30 |
+| 24-07-2026 12:30 | Rens dekker | ✅ Bevestigd |
+| 25-07-2026 14:30 | Rens dekker, Yorrick bussink, Erwin van winden | ✅ Bevestigd — Baan F, 14:30-15:30 (Erwin ontbrak, later handmatig toegevoegd — zie bug #19) |
 
 ---
 

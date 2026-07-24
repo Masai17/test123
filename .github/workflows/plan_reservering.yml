@@ -220,6 +220,15 @@ jobs:
           path: /tmp/padel_screenshot.png
           retention-days: 3
 
+      - name: Upload diagnose bij niet-gevonden partner
+        if: always() && steps.bereken.outputs.actie == 'reserveer_nu'
+        uses: actions/upload-artifact@v4
+        with:
+          name: padel-partner-niet-gevonden
+          path: /tmp/partner_niet_gevonden_*.png
+          if-no-files-found: ignore
+          retention-days: 3
+
       - name: Sla reservering op als gedaan (met retry)
         if: success() && steps.bereken.outputs.actie == 'reserveer_nu'
         env:

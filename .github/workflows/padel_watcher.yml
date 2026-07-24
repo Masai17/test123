@@ -163,6 +163,15 @@ jobs:
           path: /tmp/padel_screenshot.png
           retention-days: 3
 
+      - name: Upload diagnose bij niet-gevonden partner
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: padel-partner-niet-gevonden
+          path: /tmp/partner_niet_gevonden_*.png
+          if-no-files-found: ignore
+          retention-days: 3
+
       - name: Markeer als gedaan (met retry)
         if: success() && steps.nogcheck.outputs.al_gedaan != 'ja'
         env:
